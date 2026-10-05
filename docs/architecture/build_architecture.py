@@ -160,8 +160,13 @@ arrow([(260, 665), (320, 665)], both=True)          # users <-> IAP
 arrow([(530, 640), (560, 640)], both=True)          # IAP <-> Cloud Run
 arrow([(1250, 640), (1280, 640)], both=True)        # Cloud Run <-> Gemini
 arrow([(905, 520), (905, 460), (1530, 460)])  # Cloud Run -> BigQuery (queries)
-text(1180, 452, "Queries: VECTOR_SEARCH, facts, sales, BigQuery ML outputs", 13, MUTED, 400, "middle")
+text(920, 434, "Queries: VECTOR_SEARCH, facts,", 13, MUTED)
+text(920, 451, "sales, BigQuery ML outputs", 13, MUTED)
 arrow([(1020, 780), (1020, 820), (1680, 820), (1680, 760)])  # review workflow -> BigQuery (feedback)
+arrow([(1200, 604), (1200, 400)], both=True)  # review workflow <-> ingestion (Parse now, held facts)
+text(1212, 498, "Parse now runs", 12, MUTED)
+text(1212, 514, "steps 1–5; held", 12, MUTED)
+text(1212, 530, "facts open reviews", 12, MUTED)
 text(1350, 812, "Feedback loop: approved corrections update facts; models retrain on closed sales", 13, MUTED, 400, "middle")
 
 # Planned for production

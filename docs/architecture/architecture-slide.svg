@@ -134,8 +134,13 @@
 <path d="M530,640 L560,640" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#head)" marker-start="url(#head)"/>
 <path d="M1250,640 L1280,640" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#head)" marker-start="url(#head)"/>
 <path d="M905,520 L905,460 L1530,460" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#head)"/>
-<text x="1180" y="452" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="13" font-weight="400" fill="#5F6368" text-anchor="middle">Queries: VECTOR_SEARCH, facts, sales, BigQuery ML outputs</text>
+<text x="920" y="434" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="13" font-weight="400" fill="#5F6368" text-anchor="start">Queries: VECTOR_SEARCH, facts,</text>
+<text x="920" y="451" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="13" font-weight="400" fill="#5F6368" text-anchor="start">sales, BigQuery ML outputs</text>
 <path d="M1020,780 L1020,820 L1680,820 L1680,760" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#head)"/>
+<path d="M1200,604 L1200,400" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="1212" y="498" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="12" font-weight="400" fill="#5F6368" text-anchor="start">Parse now runs</text>
+<text x="1212" y="514" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="12" font-weight="400" fill="#5F6368" text-anchor="start">steps 1–5; held</text>
+<text x="1212" y="530" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="12" font-weight="400" fill="#5F6368" text-anchor="start">facts open reviews</text>
 <text x="1350" y="812" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="13" font-weight="400" fill="#5F6368" text-anchor="middle">Feedback loop: approved corrections update facts; models retrain on closed sales</text>
 <text x="320" y="868" font-family="Google Sans, Roboto, Arial, sans-serif" font-size="13" font-weight="700" fill="#1A73E8" text-anchor="start">PLANNED FOR PRODUCTION</text>
 <rect x="320" y="884" width="440" height="92" rx="12" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1.5" stroke-dasharray="7 5"/>
