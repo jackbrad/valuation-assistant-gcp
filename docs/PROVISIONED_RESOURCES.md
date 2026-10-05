@@ -14,7 +14,7 @@ Provisioning mechanism: **Google Cloud Python SDK Automation** (`scripts/setup_i
 | **GCP Project ID** | `takehome-gcp` | Evaluation sandbox |
 | **Project Number** | `281362663093` | Automatically resolved |
 | **Primary Region** | `us-central1` | Regional compute & serverless |
-| **BigQuery Location** | `US` (Multi-region) | Required for BQ ML & Vertex AI integration |
+| **BigQuery Location** | `US` (Multi-region) | Required for BQ ML & Agent Platform integration |
 | **DocAI Location** | `us` (Multi-region) | Document AI layout parsing |
 | **Service Account** | `id-valuation-ai-sa@takehome-gcp.iam.gserviceaccount.com` | Primary deployment identity |
 
@@ -27,7 +27,7 @@ The following APIs were programmatically enabled via Service Usage API:
 1. `bigquery.googleapis.com` — BigQuery data warehouse and analytics engine.
 2. `storage.googleapis.com` — Cloud Storage object storage.
 3. `documentai.googleapis.com` — Document AI Layout Parser processor.
-4. `aiplatform.googleapis.com` — Vertex AI foundation models and Gemini endpoints.
+4. `aiplatform.googleapis.com` — Agent Platform foundation models and Gemini endpoints.
 5. `bigqueryconnection.googleapis.com` — BigQuery Cloud Resource connections.
 6. `pubsub.googleapis.com` — Event-driven pub/sub messaging.
 7. `run.googleapis.com` — Cloud Run managed container execution.
@@ -68,7 +68,7 @@ The following APIs were programmatically enabled via Service Usage API:
 * **Resource Name:** `projects/281362663093/locations/us/connections/vertex`
 * **Connection Service Account:** `bqcx-281362663093-8wgc@gcp-sa-bigquery-condel.iam.gserviceaccount.com`
 * **IAM Roles Granted to Connection SA:**
-  * `roles/aiplatform.user` (Enables BQ to invoke Vertex AI models)
+  * `roles/aiplatform.user` (Enables BQ to invoke Agent Platform models)
   * `roles/documentai.viewer` (Enables BQ to invoke Document AI processors)
   * `roles/storage.objectViewer` (Enables BQ object tables over GCS landing bucket)
 

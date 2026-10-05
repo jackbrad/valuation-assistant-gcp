@@ -11,8 +11,11 @@ data:
   source: "bigquery" # bigquery | local
 
 models:
-  gemini_agent: "gemini-2.5-flash"
-  gemini_extract: "gemini-2.5-flash"
+  gemini_agent: "gemini-3.8-flash"           # user-facing reasoning: newest Flash
+  gemini_agent_location: "global"            # 3.8 Flash is served from the global endpoint
+  gemini_agent_thinking: "low"               # tool routing needs little reasoning; default thinking added 10-50 s
+  gemini_agent_fallback: { model: "gemini-2.5-flash", location: "us-central1" }  # used if the primary is rate-limited
+  gemini_extract: "gemini-2.5-flash"         # bulk extraction: lowest-cost capable model
   embedding: "text-embedding-005"
 
 parse:

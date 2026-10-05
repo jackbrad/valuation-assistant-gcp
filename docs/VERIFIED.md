@@ -7,10 +7,10 @@ This document records the exact versions, options, and APIs verified for the App
 | Component | Verified ID / Version | Status / Notes |
 |---|---|---|
 | Python Runtime | 3.12 (via `uv`) | Verified via local `/opt/homebrew/bin/python3` and `uv` package manager |
-| Gemini Flash Model | `gemini-2.5-flash` | Current GA Flash model in Vertex AI (`us-central1`). Verified live with SDK. [Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models) |
-| Text Embedding Model | `text-embedding-005` | Current GA 768-dim text embedding model on Vertex AI (`us-central1`). Verified live with SDK. [Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings) |
+| Gemini Flash Model | `gemini-2.5-flash` | Current GA Flash model in Agent Platform (`us-central1`). Verified live with SDK. [Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models) |
+| Text Embedding Model | `text-embedding-005` | Current GA 768-dim text embedding model on Agent Platform (`us-central1`). Verified live with SDK. [Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings) |
 | Document AI Processor | Layout Parser (`LAYOUT_PARSER_PROCESSOR`) | Location `us`, outputs spatial layout, tables, blocks, and reading order |
-| BigQuery Location | `US` multi-region | Required for `US.vertex` Cloud Resource connection with Vertex AI |
+| BigQuery Location | `US` multi-region | Required for `US.vertex` Cloud Resource connection with Agent Platform |
 | BigQuery Connection | `US.vertex` (`CLOUD_RESOURCE`) | Connection service account requires `roles/aiplatform.user` |
 | Serving Tier | Cloud Run (service `val-valuation-app`) | Region `us-central1`, containerized FastAPI + Jinja2 |
 | Event Subscriptions | Pub/Sub push to Cloud Run | Endpoints: `/_pubsub/flags`, `/_pubsub/corrections` with OIDC service account token |

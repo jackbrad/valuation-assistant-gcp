@@ -2,7 +2,8 @@
 
 Icons are the official Google Cloud icons from https://cloud.google.com/icons
 (core product icons where they exist, otherwise the legacy set). Gemini runs on
-Vertex AI, so it uses the Vertex AI icon.
+Gemini Enterprise Agent Platform (formerly Vertex AI); the icon set still names
+its icon Vertex AI, so Agent Platform cards use that icon.
 
 Run from the repository root:
     python docs/architecture/build_architecture.py
@@ -104,9 +105,9 @@ text(320, 186, "INGEST AND CLEAN", 13, BLUE, 700)
 cards = [
     (1, "cloud-storage", ["Cloud Storage"], ["Landing bucket", "One folder per", "source system"]),
     (2, "document-ai", ["Document AI"], ["Layout Parser", "Sections, tables, and", "page numbers"]),
-    (3, "vertex-ai", ["Vertex AI"], ["Gemini 2.5 Flash", "Typed facts with page", "and source quote"]),
+    (3, "vertex-ai", ["Agent Platform"], ["Gemini 2.5 Flash", "Typed facts with page", "and source quote"]),
     (4, "cloud-run", ["Data quality gate"], ["Python on Cloud Run", "Conflicts with the", "record held for review"]),
-    (5, "vertex-ai", ["Vertex AI"], ["text-embedding-005", "768-dimension vector", "per paragraph"]),
+    (5, "vertex-ai", ["Agent Platform"], ["text-embedding-005", "768-dimension vector", "per paragraph"]),
 ]
 for i, (n, ic, title, lines) in enumerate(cards):
     card(n, ic, 320 + i * 240, 200, 210, 200, title, lines)
@@ -154,7 +155,7 @@ for i, (n, title, lines) in enumerate(subs):
     for j, line in enumerate(lines):
         text(sx + 14, 660 + j * 20, line, 13)
 
-card(None, "vertex-ai", 1280, 540, 210, 200, ["Vertex AI"], ["Gemini 2.5 Flash", "Function calling", "for the agent"])
+card(None, "vertex-ai", 1280, 540, 210, 200, ["Agent Platform"], ["Gemini 3.8 Flash", "Function calling,", "low thinking level"])
 
 arrow([(260, 665), (320, 665)], both=True)          # users <-> IAP
 arrow([(530, 640), (560, 640)], both=True)          # IAP <-> Cloud Run

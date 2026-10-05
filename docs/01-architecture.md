@@ -39,7 +39,7 @@ Siloed sources ──▶ Cloud Storage (landing/<source>/) ──▶ BigQuery ob
 | BigQuery | Datasets `val_raw`, `val_core`, `val_ml`, `val_ops`; object table; `VECTOR_SEARCH`; GIS |
 | BigQuery connection | `US.vertex` (CLOUD_RESOURCE) for remote models (Document AI, Gemini, embeddings) |
 | Document AI | Layout Parser processor, location `us` |
-| Vertex AI | Gemini (via BigQuery remote model and via ADK), text embeddings, Model Registry for BQML models |
+| Agent Platform | Gemini (via BigQuery remote model and via ADK), text embeddings, Model Registry for BQML models |
 | Cloud Run | Service `valuation-app`; jobs `revalue`, `retrain`, `breaker` |
 | Pub/Sub | Topics `flags`, `corrections`; push subscriptions to `valuation-app` (`/_pubsub/flags`, `/_pubsub/corrections`) with OIDC auth |
 | Cloud Scheduler | `breaker` daily 06:00 ET; `retrain` weekly Sun 02:00 ET |
@@ -56,7 +56,7 @@ One project, one environment (`demo`). Terraform variables: `project_id`, `regio
 ## Why these choices (keep consistent with the deck)
 
 - BigQuery is system of record **and** ML platform: no data movement, SQL skills in-house, serverless.
-- `VECTOR_SEARCH` is the vector database for the prototype. Production consumer scale would add AlloyDB or Vertex AI Vector Search as a serving tier (documented, not built).
+- `VECTOR_SEARCH` is the vector database for the prototype. Production consumer scale would add AlloyDB or Vector Search in Agent Platform as a serving tier (documented, not built).
 - Document AI first, Gemini only for low-confidence pages: cheaper and repeatable.
 - Valuation math is deterministic: reproducible and auditable.
-- Time-series modeling: BQML `ARIMA_PLUS` is used for the v1 prototype's market index time adjustments (zero data movement, serverless SQL execution). The enterprise target architecture incorporates Google's **TimesFM** (Vertex AI Model Garden) via BigQuery Remote Connection for sparse submarket cold-starts, macro covariate conditioning (mortgage rates), and predictive circuit breakers (see `docs/04-ml-models.md`).
+- Time-series modeling: BQML `ARIMA_PLUS` is used for the v1 prototype's market index time adjustments (zero data movement, serverless SQL execution). The enterprise target architecture incorporates Google's **TimesFM** (Model Garden in Agent Platform) via BigQuery Remote Connection for sparse submarket cold-starts, macro covariate conditioning (mortgage rates), and predictive circuit breakers (see `docs/04-ml-models.md`).

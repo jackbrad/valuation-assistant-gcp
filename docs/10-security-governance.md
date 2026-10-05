@@ -3,10 +3,10 @@
 ## Built in the prototype
 
 - **Service accounts, least privilege**
-  - `sa-app` (Cloud Run service): BigQuery Data Editor on `val_ops`, Data Viewer on `val_core`/`val_ml`, BigQuery Job User, Storage Object Creator on evidence bucket, Viewer on landing, Vertex AI User, Pub/Sub Publisher.
-  - `sa-jobs` (revalue, retrain, breaker): Data Editor on `val_core`, `val_ml`, `val_ops`; Job User; Vertex AI User; Logging Writer.
+  - `sa-app` (Cloud Run service): BigQuery Data Editor on `val_ops`, Data Viewer on `val_core`/`val_ml`, BigQuery Job User, Storage Object Creator on evidence bucket, Viewer on landing, the Agent Platform user role (`roles/aiplatform.user`), Pub/Sub Publisher.
+  - `sa-jobs` (revalue, retrain, breaker): Data Editor on `val_core`, `val_ml`, `val_ops`; Job User; the Agent Platform user role (`roles/aiplatform.user`); Logging Writer.
   - `sa-pipeline` (local runs): Data Editor on all four datasets; Storage Admin on landing/cache.
-  - BigQuery connection SA: Vertex AI User, Document AI API User, Storage Object Viewer on landing.
+  - BigQuery connection SA: the Agent Platform user role (`roles/aiplatform.user`), Document AI API User, Storage Object Viewer on landing.
   - `sa-pubsub-push`: Run Invoker on the app.
 - **Append-only audit** in `val_ops` (corrections, decisions, flags) + Cloud Audit Logs (Data Access logs on BigQuery enabled for the four datasets).
 - **Two-approver and no-stake rules** in app logic and asserted in SQL.
@@ -17,7 +17,7 @@
 ## Production (documented, not built)
 
 - IAP on Cloud Run; roles from Google Groups.
-- VPC Service Controls perimeter around BigQuery, Storage, Vertex AI, Document AI.
+- VPC Service Controls perimeter around BigQuery, Storage, Agent Platform, Document AI.
 - CMEK on datasets and buckets.
 - Dataplex: catalog, lineage (BigQuery lineage API), data quality scans replacing custom checks.
 - Model risk management: model cards per promoted model; validation by an independent team; quarterly review.

@@ -38,7 +38,7 @@ A challenger replaces the champion only if all pass:
 3. Fairness: MdAPE spread across submarkets ≤ `promotion.max_submarket_mdape_spread`.
 4. Record a row in `val_ml.model_eval_runs` for both models.
 
-Model versions: create models with a version suffix (`avm_v20261003_1`) and maintain `val_ml.model_aliases (alias, model_name, promoted_at)` so the engine reads `champion`. Optionally register in Vertex AI Model Registry (`model_registry='VERTEX_AI'`, `vertex_ai_model_id`) — verify options.
+Model versions: create models with a version suffix (`avm_v20261003_1`) and maintain `val_ml.model_aliases (alias, model_name, promoted_at)` so the engine reads `champion`. Optionally register in Model Registry in Agent Platform (`model_registry='VERTEX_AI'`, `vertex_ai_model_id`) — verify options.
 
 ## What feedback trains what
 
@@ -71,7 +71,7 @@ BigQuery Core (val_core.sales)
 Monthly Submarket $/SF Series + Macro Covariates (Fed rates, active inventory, DOM)
          │
          ▼
-Vertex AI Model Garden / Endpoint (google/timesfm-1.0-200m)
+Model Garden in Agent Platform / Endpoint (google/timesfm-1.0-200m)
          ▲
          │ (BigQuery Remote Model via takehome-gcp.US.vertex)
          ▼
@@ -82,9 +82,9 @@ Vertex AI Model Garden / Endpoint (google/timesfm-1.0-200m)
 
 ### Comparative Tradeoff Matrix
 
-| Dimension | Baseline: BQML `ARIMA_PLUS` (v1 Implementation) | Evolution: Google `TimesFM` on Vertex AI (Target v2) |
+| Dimension | Baseline: BQML `ARIMA_PLUS` (v1 Implementation) | Evolution: Google `TimesFM` on Agent Platform (Target v2) |
 | :--- | :--- | :--- |
-| **Execution Environment** | Pure in-database BigQuery serverless slots; zero data movement | Vertex AI Model Garden endpoint called via BigQuery Remote Connection |
+| **Execution Environment** | Pure in-database BigQuery serverless slots; zero data movement | Model Garden in Agent Platform endpoint called via BigQuery Remote Connection |
 | **Operational Cost** | Fractions of a cent per monthly retraining run; no idle infrastructure | Managed endpoint compute cost (CPU or T4 GPU, ~$0.08–$0.35/hr) |
 | **Sparse / Illiquid Submarkets** | High variance when monthly sales < 10; requires 3-month rolling imputation | **Superior**: Pre-trained on 100B+ cross-domain time points; excels at zero-shot transfer |
 | **Macro Covariates** | Univariate only (past $/SF trajectory) | **Multivariate**: Conditions on 30-year mortgage rates, inventory supply, and CPI |
@@ -93,4 +93,4 @@ Vertex AI Model Garden / Endpoint (google/timesfm-1.0-200m)
 
 ### Strategic Recommendation for Customer Presentations
 - **Phase 1 (MVP / Core Prototype):** Keep BQML `ARIMA_PLUS` for fast, zero-infra SQL-native execution and deterministic Fannie Mae explainability.
-- **Phase 2 (Enterprise Scale):** Introduce TimesFM via Vertex AI Model Garden to solve low-liquidity submarket forecasting and power predictive circuit breakers.
+- **Phase 2 (Enterprise Scale):** Introduce TimesFM via Model Garden in Agent Platform to solve low-liquidity submarket forecasting and power predictive circuit breakers.

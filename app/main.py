@@ -72,7 +72,7 @@ async def healthz():
 
 @app.get("/", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    return templates.TemplateResponse(request=request, name="chat.html", context={})
+    return templates.TemplateResponse(request=request, name="chat.html", context={"agent_model": settings["models"]["gemini_agent"]})
 
 
 class ChatIn(BaseModel):
@@ -85,19 +85,22 @@ CHAT_CACHE = Path(__file__).resolve().parent.parent / "data_gen/out/chat_cache"
 
 
 def _ask_with_fallback(message: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
-    """Asks Gemini on the regional endpoint, retrying 429s, then the global endpoint."""
+    """Asks the primary agent model, retrying 429s, then falls back to a second model and region."""
     import time
     from agent.appraisal_agent import AppraisalAgent
 
+    fallback = settings["models"].get("gemini_agent_fallback", {})
+    attempts = [("primary", 0), ("primary", 2), ("fallback", 0), ("fallback", 4)]
     last_error: Optional[Exception] = None
-    for location, wait in [(None, 0), (None, 2), ("global", 0), ("global", 4)]:
+    for key, wait in attempts:
         time.sleep(wait)
         try:
-            if location not in _agents:
-                _agents[location] = AppraisalAgent(location=location)
-            return _agents[location].ask(message, history)
+            if key not in _agents:
+                _agents[key] = AppraisalAgent() if key == "primary" else AppraisalAgent(
+                    location=fallback.get("location"), model=fallback.get("model"))
+            return _agents[key].ask(message, history)
         except Exception as e:  # 429 quota, transient 5xx
-            print(f"[!] Agent call failed on {location or 'regional'} endpoint: {e}")
+            print(f"[!] Agent call failed on the {key} model: {e}")
             last_error = e
     raise last_error
 

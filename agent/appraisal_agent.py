@@ -1,6 +1,7 @@
-"""Appraisal AI Gemini Agent with tool calling on Vertex AI.
+"""Appraisal AI Gemini agent with tool calling.
 
-Uses current GA gemini-2.5-flash model with tools:
+Runs on Gemini Enterprise Agent Platform (formerly Vertex AI). The model, endpoint
+and thinking level come from config/settings.yaml (models.gemini_agent*). Tools:
 - resolve_property
 - get_property_facts
 - search_documents
@@ -121,7 +122,7 @@ def build_tools():
             from agent.retrieval import vector_search
             return {"method": "BigQuery VECTOR_SEARCH (text-embedding-005)", "results": vector_search(property_id, query)}
         except Exception as e:
-            # DEMO-SHORTCUT: keyword fallback over in-memory chunks if BigQuery/Vertex is unreachable.
+            # DEMO-SHORTCUT: keyword fallback over in-memory chunks if BigQuery or Agent Platform is unreachable.
             print(f"[!] Vector search failed, falling back to keyword search: {e}")
             words = [w for w in query.lower().split() if len(w) > 3]
             results = [
@@ -249,10 +250,10 @@ def _plain(value: Any) -> Any:
 
 
 class AppraisalAgent:
-    def __init__(self, location: Optional[str] = None):
+    def __init__(self, location: Optional[str] = None, model: Optional[str] = None):
         project_id = settings["project"]["project_id"]
-        region = location or settings["project"].get("region", "us-central1")
-        model_name = settings["models"].get("gemini_agent", "gemini-2.5-flash")
+        region = location or settings["models"].get("gemini_agent_location") or settings["project"].get("region", "us-central1")
+        model_name = model or settings["models"].get("gemini_agent", "gemini-3.8-flash")
 
         self.client = genai.Client(vertexai=True, project=project_id, location=region)
         self.model_name = model_name
@@ -272,12 +273,15 @@ class AppraisalAgent:
             for t in (history or [])
             if t.get("role") in ("user", "model") and t.get("text")
         ]
+        # thinking_level applies to Gemini 3 models only
+        thinking = settings["models"].get("gemini_agent_thinking") if self.model_name.startswith("gemini-3") else None
         chat = self.client.chats.create(
             model=self.model_name,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 tools=self.tools,
                 temperature=0.0,
+                thinking_config=types.ThinkingConfig(thinking_level=thinking) if thinking else None,
             ),
             history=prior,
         )
