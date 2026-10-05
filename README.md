@@ -44,6 +44,19 @@ Each answer also shows the issues found by code, a six-step walkthrough of the v
 | BigQuery ML | ARIMA_PLUS market index, linear regression adjustment rates, boosted tree price model |
 | Cloud Run | Web app, agent orchestration, valuation engine, and review workflow |
 
+## Cost
+
+Google Cloud list prices for `us-central1` (October 2026), with token counts measured on the prototype:
+
+| Item | Cost |
+|---|---|
+| Parse one page (Document AI Layout Parser, Gemini extraction, embeddings) | About $0.014 |
+| Answer one question (4 Gemini 2.5 Flash calls) | About $0.0033 |
+| First valuation of a typical ~60-page loan file | About $0.85 |
+| Re-valuation of a property already on file | About $0.005 |
+
+Each page is parsed once, so cost scales with documents, not questions. See `docs/customer/` for the full estimate and its assumptions.
+
 ## Repository layout
 
 | Path | Contents |
@@ -53,7 +66,7 @@ Each answer also shows the issues found by code, a six-step walkthrough of the v
 | `valuation/` | Deterministic valuation engine and risk gates |
 | `pipeline/` | Batch document pipeline and single-document ingestion |
 | `sql/` | Reference BigQuery SQL |
-| `scripts/` | Provisioning, seeding, model training, and deployment |
+| `scripts/` | Provisioning, seeding, model training, deployment, and an end-to-end demo check |
 | `data_gen/` | Synthetic data and PDF generators |
 | `jobs/` | Drift monitoring job |
 | `infra/terraform/` | Terraform module (reference) |
@@ -110,7 +123,13 @@ Each answer also shows the issues found by code, a six-step walkthrough of the v
    make deploy
    ```
 
-Run the tests with `make test`.
+Run the tests with `make test`. To check the whole demo end to end against a running app (pages, all five properties, follow-up questions, the two-approver flow, and live ingestion), run:
+
+```
+python3 scripts/check_demo.py http://localhost:8000
+```
+
+The script resets the demo data when it finishes.
 
 ## Try it
 

@@ -124,6 +124,7 @@
 <li><b>The model stated a withheld range.</b> For a property routed to an appraiser, the model repeated the range from the tool output. The tool now omits the range when a value is withheld. A test covers this case.</li>
 <li><b>The model cited checks that had passed.</b> The agent now reports only the reasons that the engine returns.</li>
 <li><b>An early version of the interface displayed numbers that were not computed.</b> The current interface builds every figure from engine output.</li>
+<li><b>Follow-up questions went to the wrong tool.</b> Asked why comparable sales were set aside, the agent searched the documents instead of the valuation and found nothing. Its instructions now route questions about value, comparable sales, and checks to the valuation tool, and questions about documents to the search tool. An end-to-end check script (<code>scripts/check_demo.py</code>) now covers follow-up questions.</li>
 <li><b>Model quota limits occurred during testing.</b> Each model call now has a 20-second limit; a stalled or rate-limited call falls back to the same model in a second region, and then the app shows a clearly labeled saved answer.</li>
 </ul>
 
@@ -135,7 +136,7 @@
 <tr><td>Time to answer a question (4 model calls, Gemini 2.5 Flash)</td><td>5–10 seconds after warm-up; follow-up questions 2–6 seconds</td></tr>
 <tr><td>Values shown while a value-moving fact is held</td><td>0</td></tr>
 <tr><td>Approvers required to change a value-moving fact</td><td>2, enforced by the server</td></tr>
-<tr><td>Automated tests</td><td>21 passing</td></tr>
+<tr><td>Automated tests</td><td>21 passing unit and integration tests, plus a 45-check end-to-end script run against the deployed app</td></tr>
 </table>
 
 <h2>Cost estimate</h2>
@@ -151,6 +152,13 @@
 <tr><td>BigQuery vector search</td><td>Within the 1 TiB monthly free tier at pilot volume</td><td>$0</td></tr>
 </table>
 <p><b>Illustrative pilot.</b> For one county with 100,000 pages of backlog and 20,000 questions a month, the estimate is about $1,350 one time to parse the backlog, and about $110 a month to run (answers about $66, one always-on Cloud Run instance about $44, BigQuery $0 within free tiers). On Gemini 3.8 Flash, answers would cost about $225 a month. These volumes are assumptions; we'll size the pilot with your actual volumes.</p>
+<p><b>Cost per valuation.</b> Each page is parsed once, so the first valuation of a property carries its parsing cost and later valuations don't.</p>
+<table border="1" cellpadding="6">
+<tr><th>Scenario</th><th>Includes</th><th>Cost</th></tr>
+<tr><td>First valuation of a typical loan file</td><td>About 60 pages parsed (an assumption: appraisal about 30, inspection about 25, permits about 5) plus one answer</td><td>About $0.85</td></tr>
+<tr><td>Re-valuation of a property already on file</td><td>One answer, a share of the Cloud Run instance, and a BigQuery vector search</td><td>About $0.005</td></tr>
+</table>
+<p>Cost scales with documents, not with questions.</p>
 <p>To reduce cost, consider a Document AI savings plan ($8 per 1,000 pages), a capped Gemini thinking budget for extraction, and parsing only new or changed documents.</p>
 
 <h2>FAQ: scope and production readiness</h2>
