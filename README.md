@@ -72,7 +72,7 @@ Each page is parsed once, so cost scales with documents, not questions. See `doc
 | `infra/terraform/` | Terraform module (reference) |
 | `clearline/` | UI design system |
 | `docs/` | Architecture and design specifications |
-| `docs/customer/` | Scope, design decisions, model selection, cost estimate, and FAQ |
+| [`docs/customer/`](docs/customer/) | Scope, design decisions, model selection, cost estimate, and FAQ (readable on GitHub) |
 | `tests/` | Unit and integration tests |
 
 ## Get started
