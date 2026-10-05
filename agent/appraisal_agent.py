@@ -255,7 +255,10 @@ class AppraisalAgent:
         region = location or settings["models"].get("gemini_agent_location") or settings["project"].get("region", "us-central1")
         model_name = model or settings["models"].get("gemini_agent", "gemini-3.8-flash")
 
-        self.client = genai.Client(vertexai=True, project=project_id, location=region)
+        # A per-call timeout turns a stalled model call into a fast fallback instead of a long wait.
+        timeout_s = settings["models"].get("gemini_agent_timeout_s")
+        http_options = types.HttpOptions(timeout=int(timeout_s * 1000)) if timeout_s else None
+        self.client = genai.Client(vertexai=True, project=project_id, location=region, http_options=http_options)
         self.model_name = model_name
         self.tools = list(build_tools())
 

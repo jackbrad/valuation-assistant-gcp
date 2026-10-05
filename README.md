@@ -22,14 +22,14 @@ Step numbers match the diagram.
 
 1. **Land.** Source documents arrive in a **Cloud Storage** landing bucket, in one folder per source system (loan origination, loan servicing, county feed, uploads). A manifest maps each document to a property.
 1. **Parse.** The **Document AI Layout Parser** processor splits each PDF into sections, paragraphs, and tables, and keeps the page number of every block (`pipeline/ingest.py`, `pipeline/run_pipeline.py`).
-1. **Extract.** **Gemini 2.5 Flash on Gemini Enterprise Agent Platform** (formerly Agent Platform) returns typed facts as JSON (living area, condition, unrecorded additions, permit numbers), each with its page and a source quote.
+1. **Extract.** **Gemini 2.5 Flash on Gemini Enterprise Agent Platform** (formerly Vertex AI) returns typed facts as JSON (living area, condition, unrecorded additions, permit numbers), each with its page and a source quote.
 1. **Check.** The **data quality gate**, Python code running on **Cloud Run**, compares each fact with the system of record. A conflicting value-moving fact is held, a review item is opened, and the valuation engine withholds the value until two reviewers resolve it.
 1. **Embed.** **`text-embedding-005` on Agent Platform** creates a 768-dimension vector for each paragraph.
 1. **Store and retrieve.** **BigQuery** load jobs write parsed blocks (`val_raw`), facts with citations, and chunks with vectors (`val_core`). Retrieval uses BigQuery **`VECTOR_SEARCH`**, filtered to one property (`agent/retrieval.py`). **BigQuery ML** trains the models the engine uses: linear regression adjustment rates for each neighborhood, an **ARIMA_PLUS** market index with forecast, and a boosted tree price model (`avm_v1`).
 
 ### Serve, explain, and govern
 
-7. **Answer.** A **Gemini 3.8 Flash** agent on **Agent Platform** (global endpoint, low thinking level), called from the **Cloud Run** app, uses function calling with three tools: find the property, search its documents, and run the valuation (`agent/appraisal_agent.py`). Every number in an answer comes from a tool output. When a value is withheld, the tool doesn't return the range, so the model can't state it.
+7. **Answer.** A **Gemini 2.5 Flash** agent on **Agent Platform**, called from the **Cloud Run** app, uses function calling with three tools: find the property, search its documents, and run the valuation (`agent/appraisal_agent.py`). Every number in an answer comes from a tool output. When a value is withheld, the tool doesn't return the range, so the model can't state it.
 1. **Value.** The **valuation engine** (Python on Cloud Run) selects comparable sales, adjusts them for market change with the market index and for feature differences with the BigQuery ML regression rates, weights them, blends the result with a price model, and runs safety checks. If a check fails, it withholds the value and routes the property to an appraiser (`valuation/engine.py`, `valuation/gates.py`).
 1. **Govern.** The **review workflow** in the Cloud Run app handles flags and corrections. A value-moving change requires evidence and two independent approvers; the server rejects approvals from the person who flagged the fact and from anyone with a stake in the loan. Reviewers can also trigger live ingestion of a newly landed document.
 
@@ -39,7 +39,7 @@ Each answer also shows the issues found by code, a six-step walkthrough of the v
 |---|---|
 | Cloud Storage | Landing bucket for source documents |
 | Document AI | Layout Parser processor |
-| Gemini Enterprise Agent Platform (formerly Agent Platform) | `gemini-3.8-flash` (agent), `gemini-2.5-flash` (extraction), `text-embedding-005` (embeddings) |
+| Gemini Enterprise Agent Platform (formerly Vertex AI) | `gemini-2.5-flash` (agent and extraction; `gemini-3.8-flash` evaluated), `text-embedding-005` (embeddings) |
 | BigQuery | Datasets `val_raw`, `val_core`, `val_ml`, `val_ops`; `VECTOR_SEARCH` |
 | BigQuery ML | ARIMA_PLUS market index, linear regression adjustment rates, boosted tree price model |
 | Cloud Run | Web app, agent orchestration, valuation engine, and review workflow |

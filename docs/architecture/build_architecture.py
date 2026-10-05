@@ -155,7 +155,7 @@ for i, (n, title, lines) in enumerate(subs):
     for j, line in enumerate(lines):
         text(sx + 14, 660 + j * 20, line, 13)
 
-card(None, "vertex-ai", 1280, 540, 210, 200, ["Agent Platform"], ["Gemini 3.8 Flash", "Function calling,", "low thinking level"])
+card(None, "vertex-ai", 1280, 540, 210, 200, ["Agent Platform"], ["Gemini 2.5 Flash", "Function calling", "for the agent"])
 
 arrow([(260, 665), (320, 665)], both=True)          # users <-> IAP
 arrow([(530, 640), (560, 640)], both=True)          # IAP <-> Cloud Run

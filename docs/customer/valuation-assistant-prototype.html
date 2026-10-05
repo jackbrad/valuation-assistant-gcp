@@ -20,7 +20,7 @@
 <ul>
 <li>Parses PDFs into typed, cited facts with Document AI and Gemini.</li>
 <li>Stores facts, text chunks, and embeddings in BigQuery, and retrieves them with BigQuery vector search.</li>
-<li>Answers questions through a Gemini agent on Gemini Enterprise Agent Platform (formerly Agent Platform) that calls tools. The agent explains; a deterministic valuation engine backed by BigQuery ML computes.</li>
+<li>Answers questions through a Gemini agent on Gemini Enterprise Agent Platform (formerly Vertex AI) that calls tools. The agent explains; a deterministic valuation engine backed by BigQuery ML computes.</li>
 <li>Holds any fact that conflicts with the system of record, withholds the value, and requires two independent approvers to change it.</li>
 </ul>
 <p>This document records what the prototype includes, the design decisions behind it, what it deliberately leaves out, and what a production deployment needs. Use the FAQ section to review gaps before you plan a pilot.</p>
@@ -107,7 +107,7 @@
 <p>Each task uses the simplest model that meets the requirement, and valuation math stays in statistical models that an appraiser or a model validator can inspect. The evidence column shows results measured on the prototype. All data is synthetic, so these results show that the pipeline works, not how the models will perform on your data.</p>
 <table border="1" cellpadding="6">
 <tr><th>Task</th><th>Model</th><th>Why this model</th><th>Alternatives considered</th><th>Evidence from the prototype</th></tr>
-<tr><td>Agent: plan tool calls and write answers</td><td>Gemini 3.8 Flash, low thinking level</td><td>The newest Flash model, where users see the reasoning. Reliable function calling. The agent explains and cites; it doesn't compute, so a low thinking level is enough.</td><td>Gemini 2.5 Flash (about a third of the cost, faster in-region, an older generation); Gemini Pro models (stronger reasoning, higher cost and latency); open models in Model Garden in Agent Platform (more to operate)</td><td>All three tools called and the correct page cited in every test run, including every demo scenario. 9–19 seconds per answer and about $0.011 (4 calls, 6,065 input and about 275 output tokens). The default thinking level took 16–62 seconds, so the agent uses the low level.</td></tr>
+<tr><td>Agent: plan tool calls and write answers</td><td>Gemini 2.5 Flash, pinned</td><td>Reliable function calling, 5–10 seconds, and low cost in <code>us-central1</code>. The agent explains and cites; it doesn't compute, so it doesn't need the strongest reasoning model.</td><td>Gemini 3.8 Flash (evaluated, see evidence); Gemini Pro models (stronger reasoning, higher cost and latency); open models in Model Garden (more to operate)</td><td>All three tools called and the correct page cited in every test run; 5–10 seconds and about $0.0033 per answer (4 calls, 5,862 input and 607 output tokens). Gemini 3.8 Flash was evaluated on October 5, 2026: the same tool calls and citations, 9–19 seconds at a low thinking level, about $0.011 per answer, but its only available endpoint (global) returned timeouts on 6 of 6 calls that afternoon. The demo pins Gemini 2.5 Flash and switches with one configuration line once 3.8 Flash is stable in the region.</td></tr>
 <tr><td>Extract typed facts from documents</td><td>Gemini 2.5 Flash with JSON output</td><td>Handles varied layouts and wording without labeled training data, and returns typed fields with a page and source quote.</td><td>Document AI Custom Extractor (more consistent on fixed forms such as standard appraisal forms, but needs labeled examples); Gemini 2.5 Flash-Lite (lower cost)</td><td>Extracted condition C4 from page 2 of a newly ingested inspection. Most extraction output is model thinking, so a capped thinking budget lowers cost.</td></tr>
 <tr><td>Parse PDF layout</td><td>Document AI Layout Parser</td><td>Preserves sections, tables, reading order, and page numbers, and includes chunking.</td><td>Enterprise Document OCR (text only, no structure); Form Parser (key-value pairs, $30 per 1,000 pages); sending PDFs directly to Gemini (no stable page structure for citations)</td><td>Parsed a 2-page inspection into 11 blocks in about 3 seconds, with page numbers on every block.</td></tr>
 <tr><td>Embed text for retrieval</td><td><code>text-embedding-005</code> (768 dimensions)</td><td>Strong English retrieval at low cost ($0.000025 per 1,000 characters), and works directly with BigQuery vector search.</td><td><code>gemini-embedding-001</code> (higher quality and multilingual, about 6 times the price per character)</td><td>For "Has the house been expanded?", the inspection paragraph about the addition ranked first (similarity 0.71–0.78), followed by the permit.</td></tr>
@@ -124,7 +124,7 @@
 <li><b>The model stated a withheld range.</b> For a property routed to an appraiser, the model repeated the range from the tool output. The tool now omits the range when a value is withheld. A test covers this case.</li>
 <li><b>The model cited checks that had passed.</b> The agent now reports only the reasons that the engine returns.</li>
 <li><b>An early version of the interface displayed numbers that were not computed.</b> The current interface builds every figure from engine output.</li>
-<li><b>Model quota limits occurred during testing.</b> Calls now retry, fall back from Gemini 3.8 Flash on the global endpoint to Gemini 2.5 Flash in <code>us-central1</code>, and then show a clearly labeled saved answer.</li>
+<li><b>Model quota limits occurred during testing.</b> Each model call now has a 20-second limit; a stalled or rate-limited call falls back to the same model in a second region, and then the app shows a clearly labeled saved answer.</li>
 </ul>
 
 <h2>Measured results</h2>
@@ -132,7 +132,7 @@
 <table border="1" cellpadding="6">
 <tr><th>Measure</th><th>Result</th></tr>
 <tr><td>Time from a landed PDF to searchable, cited facts (2-page document)</td><td>About 10 seconds</td></tr>
-<tr><td>Time to answer a question (4 model calls, Gemini 3.8 Flash)</td><td>9–19 seconds after warm-up; follow-up questions 2–6 seconds</td></tr>
+<tr><td>Time to answer a question (4 model calls, Gemini 2.5 Flash)</td><td>5–10 seconds after warm-up; follow-up questions 2–6 seconds</td></tr>
 <tr><td>Values shown while a value-moving fact is held</td><td>0</td></tr>
 <tr><td>Approvers required to change a value-moving fact</td><td>2, enforced by the server</td></tr>
 <tr><td>Automated tests</td><td>21 passing</td></tr>
@@ -146,10 +146,11 @@
 <tr><td>Gemini 2.5 Flash extraction</td><td>About 1,000 input and 1,250 output tokens per page</td><td>$0.0034 per page</td></tr>
 <tr><td><code>text-embedding-005</code></td><td>$0.000025 per 1,000 characters</td><td>$0.0001 per page</td></tr>
 <tr><td><b>Total per page parsed</b></td><td></td><td><b>About $0.014</b></td></tr>
-<tr><td>Gemini 3.8 Flash, per answer</td><td>4 calls, 6,065 input and about 275 output tokens (measured); $1.50 and $7.50 per 1M input and output tokens</td><td>$0.011 per answer</td></tr>
+<tr><td>Gemini 2.5 Flash, per answer</td><td>4 calls, 5,862 input and 607 output tokens (measured); $0.30 and $2.50 per 1M input and output tokens</td><td>$0.0033 per answer</td></tr>
+<tr><td>Gemini 3.8 Flash, per answer (evaluated)</td><td>4 calls, 6,065 input and about 275 output tokens (measured); $1.50 and $7.50 per 1M tokens</td><td>$0.011 per answer</td></tr>
 <tr><td>BigQuery vector search</td><td>Within the 1 TiB monthly free tier at pilot volume</td><td>$0</td></tr>
 </table>
-<p><b>Illustrative pilot.</b> For one county with 100,000 pages of backlog and 20,000 questions a month, the estimate is about $1,350 one time to parse the backlog, and about $270 a month to run (answers about $225, one always-on Cloud Run instance about $44, BigQuery $0 within free tiers). These volumes are assumptions; we'll size the pilot with your actual volumes.</p>
+<p><b>Illustrative pilot.</b> For one county with 100,000 pages of backlog and 20,000 questions a month, the estimate is about $1,350 one time to parse the backlog, and about $110 a month to run (answers about $66, one always-on Cloud Run instance about $44, BigQuery $0 within free tiers). On Gemini 3.8 Flash, answers would cost about $225 a month. These volumes are assumptions; we'll size the pilot with your actual volumes.</p>
 <p>To reduce cost, consider a Document AI savings plan ($8 per 1,000 pages), a capped Gemini thinking budget for extraction, and parsing only new or changed documents.</p>
 
 <h2>FAQ: scope and production readiness</h2>
@@ -218,7 +219,7 @@
 <p><i>In production:</i> Write every answer to BigQuery with the question, user, model version, tool calls and outputs, cited pages, valuation ID, and latency, so every answer is reproducible and auditable.</p>
 
 <p><b>Are model versions pinned?</b></p>
-<p><i>In the prototype:</i> The app calls <code>gemini-3.8-flash</code> (agent), <code>gemini-2.5-flash</code> (extraction), and <code>text-embedding-005</code> by name, set in <code>config/settings.yaml</code>.</p>
+<p><i>In the prototype:</i> The app pins <code>gemini-2.5-flash</code> (agent and extraction) and <code>text-embedding-005</code> in <code>config/settings.yaml</code>. Gemini 3.8 Flash was evaluated and can be switched on with one line.</p>
 <p><i>In production:</i> Pin versions, re-embed all chunks when the embedding model changes, and test prompts against the evaluation set before an upgrade.</p>
 
 <h3>Valuation and models</h3>
@@ -255,9 +256,9 @@
 <p><i>In the prototype:</i> The training data already lives in BigQuery. BigQuery ML trains, evaluates, explains, and serves models in SQL, without moving data or running training infrastructure.</p>
 <p><i>In production:</i> Keep BigQuery ML for the regression adjustments, the market index, and the first AVM. Move a model to Agent Platform (AutoML Tabular or custom training) only if it needs a model type or tuning that BigQuery ML doesn't support. Register models in Model Registry in Agent Platform either way.</p>
 
-<p><b>Why Gemini 3.8 Flash for the agent and Gemini 2.5 Flash for extraction?</b></p>
-<p><i>In the prototype:</i> Each task gets the model that fits it. The agent is user-facing, so it uses the newest Flash model at a low thinking level: correct in every test run, 9–19 seconds, about a cent per answer. Extraction runs on every page of every document, so it uses Gemini 2.5 Flash, the lowest-cost model that extracted the facts correctly.</p>
-<p><i>In production:</i> Decide per task with the evaluation set. Test a Pro model for complex multi-document questions, and re-test extraction on newer Flash and Flash-Lite models as they become available in your region.</p>
+<p><b>Why Gemini 2.5 Flash when Gemini 3.8 Flash is available?</b></p>
+<p><i>In the prototype:</i> We evaluated Gemini 3.8 Flash for the agent on October 5, 2026. It made the same tool calls and citations, took 9–19 seconds per answer at a low thinking level (16–62 seconds at the default level), and cost about $0.011 per answer, about 3 times Gemini 2.5 Flash. It's served only from the global endpoint for this project, and that afternoon 6 of 6 calls timed out. The demo pins Gemini 2.5 Flash in <code>us-central1</code>: 5–10 seconds, about $0.0033 per answer.</p>
+<p><i>In production:</i> Pin model versions, evaluate each new release against the evaluation set for accuracy, latency, reliability, and cost, and switch with a configuration change once it wins. Test a Pro model for complex multi-document questions.</p>
 
 <p><b>Why linear regression for adjustments when boosted trees are more accurate?</b></p>
 <p><i>In the prototype:</i> Adjustments must be explainable to an appraiser and a regulator. A regression coefficient is the adjustment ("$235 per square foot"); a tree ensemble needs a separate explanation method.</p>
@@ -340,7 +341,7 @@
 <tr><th>Service</th><th>Resources</th></tr>
 <tr><td>Cloud Storage</td><td>Landing, evidence, and cache buckets</td></tr>
 <tr><td>Document AI</td><td>One Layout Parser processor (<code>us</code>)</td></tr>
-<tr><td>Agent Platform</td><td><code>gemini-3.8-flash</code> for the agent (global endpoint); <code>gemini-2.5-flash</code> for extraction; <code>text-embedding-005</code> for embeddings</td></tr>
+<tr><td>Agent Platform</td><td><code>gemini-2.5-flash</code> for the agent and extraction (<code>gemini-3.8-flash</code> evaluated); <code>text-embedding-005</code> for embeddings</td></tr>
 <tr><td>BigQuery</td><td>Four datasets: <code>val_raw</code> (landed documents and parser output), <code>val_core</code> (properties, sales, facts, chunks, and valuations), <code>val_ml</code> (training data and adjustment grids), and <code>val_ops</code> (governance tables). One Cloud resource connection to Agent Platform.</td></tr>
 <tr><td>BigQuery ML</td><td><code>market_index_arima_v1</code> (ARIMA_PLUS market index), <code>comp_ranker_v1</code> (boosted tree classifier for comparable sales; not used, see Model selection), <code>adj_larkspur_v1</code>, <code>adj_old_town_v1</code>, <code>adj_hilltop_v1</code>, <code>adj_riverside_v1</code> (linear regression adjustment rates), and <code>avm_v1</code> (boosted tree regressor)</td></tr>
 <tr><td>Pub/Sub</td><td><code>flags</code> and <code>corrections</code> topics (no subscriptions yet)</td></tr>

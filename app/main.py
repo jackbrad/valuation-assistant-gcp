@@ -90,7 +90,8 @@ def _ask_with_fallback(message: str, history: List[Dict[str, str]]) -> Dict[str,
     from agent.appraisal_agent import AppraisalAgent
 
     fallback = settings["models"].get("gemini_agent_fallback", {})
-    attempts = [("primary", 0), ("primary", 2), ("fallback", 0), ("fallback", 4)]
+    # Primary once (a stall or 429 goes straight to the fallback model), then the fallback twice.
+    attempts = [("primary", 0), ("fallback", 0), ("fallback", 3)]
     last_error: Optional[Exception] = None
     for key, wait in attempts:
         time.sleep(wait)
