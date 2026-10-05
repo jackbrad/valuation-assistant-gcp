@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Valuation assistant{% endblock %}</title>
+  <link rel="stylesheet" href="/clearline/tokens/tokens.css">
+  <link rel="stylesheet" href="/clearline/components/clearline.css">
+  <link rel="stylesheet" href="/static/chat.css">
+  <link rel="stylesheet" href="/static/pages.css">
+  <script>
+    try {
+      const t = localStorage.getItem('clearline-theme');
+      if (t) document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="cl-topbar">
+    <a class="brand" href="/">
+      <div class="cl-topbar-mark"><span class="cl-icon">home_work</span></div>
+      <span class="cl-topbar-name">Valuation assistant</span>
+    </a>
+    <span class="cl-topbar-context">Cedar Hollow · synthetic data</span>
+    <nav class="nav" aria-label="Main">
+      {% set path = request.url.path %}
+      <a href="/" class="nav-link {% if path == '/' %}active{% endif %}"><span class="cl-icon">forum</span><span>Assistant</span></a>
+      <a href="/review" class="nav-link {% if path.startswith('/review') %}active{% endif %}">
+        <span class="cl-icon">rule</span><span>Review queue</span>
+        {% set pending = get_pending_queue_count() %}
+        {% if pending %}<span class="cl-badge cl-badge-new count">{{ pending }}</span>{% endif %}
+      </a>
+      <a href="/health" class="nav-link {% if path.startswith('/health') %}active{% endif %}"><span class="cl-icon">monitor_heart</span><span>Model health</span></a>
+    </nav>
+    <div class="cl-topbar-spacer"></div>
+    <div class="cl-topbar-actions">
+      {% block actions %}{% endblock %}
+      <button type="button" class="cl-btn cl-btn-ghost cl-btn-sm" id="themeBtn" aria-label="Switch theme">
+        <span class="cl-icon" id="themeIcon">dark_mode</span>
+      </button>
+    </div>
+  </header>
+
+  {% block content %}{% endblock %}
+
+  <!-- PAGE VIEWER (opened by any .cite button) -->
+  <div class="viewer" id="viewer" hidden>
+    <div class="viewer-panel" role="dialog" aria-modal="true" aria-labelledby="viewerTitle">
+      <div class="viewer-head">
+        <span class="cl-icon">description</span>
+        <span class="title" id="viewerTitle"></span>
+        <div class="cl-topbar-spacer"></div>
+        <button type="button" class="cl-btn cl-btn-ghost cl-btn-sm" id="viewerClose" aria-label="Close"><span class="cl-icon">close</span></button>
+      </div>
+      <div class="viewer-body"><img id="viewerImg" alt=""></div>
+    </div>
+  </div>
+
+  <script src="/static/common.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

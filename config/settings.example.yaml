@@ -1,0 +1,82 @@
+# All thresholds and tunables. Copy to config/settings.yaml.
+project:
+  project_id: "<your-gcp-project>"
+  region: "us-central1"
+  bq_location: "US"
+  docai_location: "us"
+  name_prefix: "val"
+  datasets: { raw: "val_raw", core: "val_core", ml: "val_ml", ops: "val_ops" }
+
+models:
+  gemini_agent: "<latest GA Gemini Flash id — verify>"
+  gemini_extract: "<latest GA Gemini Flash id — verify>"
+  embedding: "<current Vertex text embedding id — verify>"
+
+parse:
+  docai_min_confidence: 0.75
+  gemini_confidence_cap: 0.90
+  prompt_version: "v1"
+
+g1:
+  min_confidence: 0.80
+  tolerance: { gla_sqft: 0.05, lot_sqft: 0.05, year_built: 1 }
+  ranges:
+    gla_sqft: [300, 15000]
+    beds: [0, 12]
+    baths_full: [0, 10]
+    year_built: [1850, 2026]
+    lot_sqft: [500, 2000000]
+    condition_c: [1, 6]
+    quality_q: [1, 6]
+
+comps:
+  radius_m_steps: [1609, 3219, 4828]     # 1, 2, 3 miles
+  lookback_months_steps: [6, 9, 12]
+  max_used: 6
+  max_gross_adj_pct: 0.25
+
+adjustment_clamps:                        # dollars per unit
+  gla_sqft: [40, 400]
+  beds: [0, 25000]
+  baths_total: [0, 30000]
+  age_yrs: [-3000, 0]
+  pool: [0, 40000]
+  condition_c: [-60000, 0]                # higher C number = worse condition
+  quality_q: [-80000, 0]
+
+reconcile:
+  alpha_sales_comp: 0.7
+  range_min_half_width_pct: 0.03
+
+g2:
+  normal:    { min_candidates: 5, min_comps: 3, max_range_width: 0.20, max_divergence: 0.10 }
+  tightened: { min_candidates: 8, min_comps: 5, max_range_width: 0.12, max_divergence: 0.06 }
+  ood_percentiles: [1, 99]
+  ood_gla_vs_comps: 0.40
+
+feedback:
+  value_moving_fields: [gla_sqft, beds, baths_full, baths_half, condition_c, quality_q, pool, lot_sqft, year_built]
+  random_sample_per_week: 10
+
+cascade:
+  lookback_days: 180
+
+breaker:
+  window_days: 90
+  min_n: 15
+  mdape_abs_threshold: 0.08
+  mdape_ratio_threshold: 1.5
+  max_overvaluation_bias: 0.04
+  forecast_drop_threshold: -0.03
+  reset_after_days_normal: 30
+
+promotion:
+  max_submarket_mdape_spread: 0.04
+  gold_set_tolerance_pct: 0.02
+
+events:
+  use_pubsub: true
+
+demo:
+  seed: 20261005
+  as_of_date: "2026-10-05"

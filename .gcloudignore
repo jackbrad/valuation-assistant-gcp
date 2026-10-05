@@ -1,0 +1,19 @@
+# Files excluded from `gcloud run deploy --source`. Without this file gcloud
+# uses .gitignore, which drops data_gen/out/manifest.jsonl (needed for
+# "Documents on file").
+.gcloudignore
+.git
+.gitignore
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.review_tmp/
+.gemini/
+.agents/
+.DS_Store
+.env
+*.json
+tests/
+data_gen/out/*
+!data_gen/out/manifest.jsonl

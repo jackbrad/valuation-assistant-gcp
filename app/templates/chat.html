@@ -1,0 +1,118 @@
+{% extends "shell.html" %}
+{% block actions %}
+      <button type="button" class="cl-btn cl-btn-ghost cl-btn-sm" id="newChat" hidden>
+        <span class="cl-icon">add</span><span>New question</span>
+      </button>
+{% endblock %}
+{% block content %}
+  <!-- EMPTY STATE: one sentence, one box, three examples -->
+  <main class="start" id="start">
+    <h1 class="display">Ask about any property</h1>
+    <p class="body-lg">Answers come from inspection reports, appraisals and permits that were parsed into BigQuery. Every claim links to the page it came from.</p>
+    <form class="cl-prompt ask" id="askForm">
+      <textarea class="cl-prompt-input" id="askInput" rows="2" placeholder="e.g. What's 14 Larkspur Ln worth? It's a refi." required></textarea>
+      <div class="cl-prompt-bar">
+        <span class="cl-prompt-meta">gemini-2.5-flash · BigQuery vector search</span>
+        <button type="submit" class="cl-btn cl-btn-primary"><span class="cl-icon">arrow_upward</span><span>Ask</span></button>
+      </div>
+    </form>
+    <div class="examples-label label">Try a property</div>
+    <div class="scenarios">
+      <button type="button" class="scenario chip" data-q="What's 14 Larkspur Ln worth? It's a refi.">
+        <span class="scenario-addr">14 Larkspur Ln</span><span class="scenario-tag">Documents show an addition the county record misses</span>
+      </button>
+      <button type="button" class="scenario chip" data-q="What is 18 Larkspur Ln worth?">
+        <span class="scenario-addr">18 Larkspur Ln</span><span class="scenario-tag">Clean case: value shown</span>
+      </button>
+      <button type="button" class="scenario chip" data-q="What is 22 Hilltop Rd worth?">
+        <span class="scenario-addr">22 Hilltop Rd</span><span class="scenario-tag">Sources disagree, so living area is on hold</span>
+      </button>
+      <button type="button" class="scenario chip" data-q="What is 31 Mill Race Dr worth?">
+        <span class="scenario-addr">31 Mill Race Dr</span><span class="scenario-tag">Market drift: stricter checks in Riverside</span>
+      </button>
+      <button type="button" class="scenario chip" data-q="What is 7 Wren Ct worth?">
+        <span class="scenario-addr">7 Wren Ct</span><span class="scenario-tag">Unusual house: not enough comparable sales</span>
+      </button>
+    </div>
+  </main>
+
+  <!-- RESULT: conversation left, evidence right -->
+  <main class="result" id="result" hidden>
+    <section class="conversation">
+      <div class="thread" id="thread"></div>
+      <form class="cl-prompt ask" id="followForm">
+        <textarea class="cl-prompt-input" id="followInput" rows="1" placeholder="Ask a follow-up, e.g. What does the permit say?" required></textarea>
+        <div class="cl-prompt-bar">
+          <span class="cl-prompt-meta" id="metaLine"></span>
+          <button type="submit" class="cl-btn cl-btn-primary"><span class="cl-icon">arrow_upward</span><span>Ask</span></button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="evidence" id="evidence">
+      <div class="cl-card" id="valueCard" hidden></div>
+
+      <div class="cl-card" id="docsCard" hidden>
+        <div>
+          <div class="cl-card-eyebrow">What we reviewed</div>
+          <h2 class="cl-card-title">Documents on file</h2>
+        </div>
+        <div id="docs" class="docs"></div>
+      </div>
+      <div class="cl-card" id="stepsCard" hidden>
+        <div>
+          <div class="cl-card-eyebrow">What the agent did</div>
+          <h2 class="cl-card-title">Tool calls <span class="caption turn" id="stepsTurn"></span></h2>
+        </div>
+        <ol id="steps" class="steps"></ol>
+      </div>
+    </aside>
+  </main>
+
+
+  <!-- FLAG DRAWER -->
+  <div class="drawer-backdrop" id="flagDrawer" hidden>
+    <form class="drawer" method="post" action="/api/flags" aria-labelledby="flagTitle">
+      <div class="drawer-head">
+        <div>
+          <div class="cl-card-eyebrow">Send to the review queue</div>
+          <h2 class="title" id="flagTitle">Flag for correction</h2>
+        </div>
+        <button type="button" class="cl-btn cl-btn-ghost cl-btn-sm" data-close aria-label="Close"><span class="cl-icon">close</span></button>
+      </div>
+      <div class="drawer-body">
+        <input type="hidden" name="property_id" id="flagProperty">
+        <input type="hidden" name="field_name" id="flagField">
+        <input type="hidden" name="evidence_desc" id="flagEvidence">
+        <input type="hidden" name="user_id" value="alex.reviewer">
+        <div class="cl-field">
+          <span class="cl-field-label">Field</span>
+          <div class="readonly" id="flagLabel"></div>
+        </div>
+        <div class="cl-field">
+          <span class="cl-field-label">Current value</span>
+          <div class="readonly" id="flagCurrent"></div>
+        </div>
+        <label class="cl-field">
+          <span class="cl-field-label">Correct value</span>
+          <input class="cl-input" name="proposed_value" id="flagValue" inputmode="numeric" required placeholder="Enter the value the evidence supports">
+          <span class="cl-field-help">Nothing changes until two reviewers approve.</span>
+        </label>
+        <label class="cl-field">
+          <span class="cl-field-label">Reason</span>
+          <textarea class="cl-input" name="reason" rows="3" required placeholder="e.g. Stale record: the 2024 addition isn't in the county data"></textarea>
+        </label>
+        <div class="cl-field">
+          <span class="cl-field-label">Evidence attached</span>
+          <div id="flagCites" class="doc-pages"></div>
+        </div>
+        <p class="caption muted">Flagged by Alex Vance (appraisal reviewer).</p>
+      </div>
+      <div class="drawer-foot">
+        <button type="button" class="cl-btn cl-btn-secondary" data-close>Cancel</button>
+        <button type="submit" class="cl-btn cl-btn-primary"><span class="cl-icon">send</span><span>Send to review queue</span></button>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+{% block scripts %}<script src="/static/chat.js"></script>{% endblock %}

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en" data-theme="{{ request.query_params.get('theme', 'light') }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Appraisal AI — Valuation governance{% endblock %}</title>
+  <link rel="stylesheet" href="/clearline/tokens/tokens.css">
+  <link rel="stylesheet" href="/clearline/components/clearline.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <!-- CLEARLINE TOPBAR -->
+  <header class="cl-topbar">
+    <div class="cl-topbar-mark">
+      <span class="cl-icon">analytics</span>
+    </div>
+    <a href="/?user={{ user }}" style="text-decoration:none;display:flex;align-items:center;gap:var(--space-2);color:inherit;">
+      <span class="cl-topbar-name">Appraisal AI</span>
+    </a>
+    <div class="cl-topbar-context">{% block context_name %}Valuation Case File{% endblock %}</div>
+
+    <div style="display:flex;align-items:center;gap:var(--space-2);margin-left:var(--space-4);">
+      <a href="/?user={{ user }}" class="cl-topbar-link {% if request.url.path == '/' %}active{% endif %}">
+        <span class="cl-icon" style="font-size:16px;">home</span>
+        <span>Home</span>
+      </a>
+      <a href="/ask?user={{ user }}" class="cl-topbar-link {% if request.url.path == '/ask' and request.query_params.get('view') != 'catalog' %}active{% endif %}">
+        <span class="cl-icon" style="font-size:16px;">search</span>
+        <span>Evaluate</span>
+      </a>
+      <a href="/review?user={{ user }}" class="cl-topbar-link {% if request.url.path == '/review' %}active{% endif %}">
+        <span class="cl-icon" style="font-size:16px;">rule</span>
+        <span>Review queue</span>
+        {% if get_pending_queue_count and get_pending_queue_count() > 0 %}
+          <span class="cl-badge cl-badge-warning" style="font-size:10px;padding:0 5px;height:18px;">{{ get_pending_queue_count() }}</span>
+        {% endif %}
+      </a>
+      <a href="/health?user={{ user }}" class="cl-topbar-link {% if request.url.path == '/health' %}active{% endif %}">
+        <span class="cl-icon" style="font-size:16px;">monitor_heart</span>
+        <span>Model health</span>
+      </a>
+    </div>
+
+    <div class="cl-topbar-spacer"></div>
+
+    <div class="cl-topbar-actions">
+      <select class="cl-select" aria-label="Switch user persona" onchange="window.location.href = updateQueryString('user', this.value);">
+        {% for u_id, u_info in users.items() %}
+        <option value="{{ u_id }}" {% if u_id == user %}selected{% endif %}>
+          {{ u_info.name }} ({{ u_info.role }}){% if u_info.has_stake %} [Loan officer · blocked by rule]{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      {% if current_user.has_stake %}
+        <span class="cl-badge cl-badge-danger" title="Conflict of interest rule: Loan officers cannot approve or alter property values.">
+          <span class="cl-icon">block</span>
+          <span>Stake blocked</span>
+        </span>
+      {% else %}
+        <span class="cl-badge cl-badge-brand" title="Authorized independent reviewer for property data changes.">
+          <span class="cl-icon">verified_user</span>
+          <span>Authorized reviewer</span>
+        </span>
+      {% endif %}
+      <button type="button" class="cl-btn cl-btn-ghost cl-btn-sm" onclick="toggleTheme()" id="themeBtn" aria-label="Toggle theme">
+        <span class="cl-icon" id="themeIcon">dark_mode</span>
+        <span id="themeLabel">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN PAGE CONTAINER (Max width 1200px) -->
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    function updateQueryString(key, value) {
+      const url = new URL(window.location.href);
+      url.searchParams.set(key, value);
+      return url.toString();
+    }
+
+    function initTheme() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlTheme = urlParams.get('theme');
+      if (urlTheme === 'dark' || urlTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', urlTheme);
+      } else {
+        const saved = localStorage.getItem('clearline-theme');
+        if (saved) {
+          document.documentElement.setAttribute('data-theme', saved);
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      }
+      updateThemeButton();
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('clearline-theme', next);
+      updateThemeButton();
+    }
+
+    function updateThemeButton() {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const icon = document.getElementById('themeIcon');
+      const label = document.getElementById('themeLabel');
+      if (icon && label) {
+        icon.textContent = isDark ? 'light_mode' : 'dark_mode';
+        label.textContent = isDark ? 'Light' : 'Dark';
+      }
+    }
+
+    function toggleDemoGuide() {
+      const content = document.getElementById('demoGuideContent');
+      const btn = document.getElementById('guideToggleBtn');
+      if (!content || !btn) return;
+      const isHidden = content.style.display === 'none';
+      content.style.display = isHidden ? 'block' : 'none';
+      btn.textContent = isHidden ? 'Hide guide' : 'Show guide';
+      localStorage.setItem('hide-demo-guide', isHidden ? 'false' : 'true');
+    }
+
+    function initDemoGuide() {
+      if (localStorage.getItem('hide-demo-guide') === 'true') {
+        const content = document.getElementById('demoGuideContent');
+        const btn = document.getElementById('guideToggleBtn');
+        if (content && btn) {
+          content.style.display = 'none';
+          btn.textContent = 'Show guide';
+        }
+      }
+    }
+
+    initTheme();
+    initDemoGuide();
+  </script>
+</body>
+</html>

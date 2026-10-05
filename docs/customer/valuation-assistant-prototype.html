@@ -1,0 +1,358 @@
+<html>
+<head><meta charset="utf-8"><title>Valuation assistant prototype: scope, design decisions, and path to production</title></head>
+<body>
+
+<h1>Valuation assistant prototype: scope, design decisions, and path to production</h1>
+
+<table border="1" cellpadding="6">
+<tr><td><b>Prepared for</b></td><td>Valuation and data leadership, [Customer] (name withheld)</td></tr>
+<tr><td><b>Prepared by</b></td><td>Jack Bradham, Practice Customer Engineer, Cloud AI, Google Cloud</td></tr>
+<tr><td><b>Status</b></td><td>Draft for discussion</td></tr>
+<tr><td><b>Last updated</b></td><td>October 4, 2026</td></tr>
+<tr><td><b>Related material</b></td><td>Technical evaluation deck; live prototype on Cloud Run (link shared separately)</td></tr>
+</table>
+
+<p><b>Confidentiality:</b> This document describes a prototype built on synthetic data. It contains no customer data. Prices are Google Cloud list prices as of October 2026 and are estimates, not a quote.</p>
+
+<h2>Summary</h2>
+<p>Your valuation teams need fast answers they can defend. The evidence behind those answers sits in unstructured PDFs (appraisals, inspections, and permits) spread across systems that don't share data. Standard retrieval-augmented generation (RAG) can retrieve that text, but it doesn't preserve page-level citations, it doesn't reconcile documents with your system of record, and it leaves arithmetic to the language model.</p>
+<p>To show a path forward, we built a working prototype on Google Cloud in two days. The prototype does the following:</p>
+<ul>
+<li>Parses PDFs into typed, cited facts with Document AI and Gemini.</li>
+<li>Stores facts, text chunks, and embeddings in BigQuery, and retrieves them with BigQuery vector search.</li>
+<li>Answers questions through a Gemini agent that calls tools. The agent explains; a deterministic valuation engine backed by BigQuery ML computes.</li>
+<li>Holds any fact that conflicts with the system of record, withholds the value, and requires two independent approvers to change it.</li>
+</ul>
+<p>This document records what the prototype includes, the design decisions behind it, what it deliberately leaves out, and what a production deployment needs. Use the FAQ section to review gaps before you plan a pilot.</p>
+
+<h2>Background and objectives</h2>
+<h3>The problem</h3>
+<p>For a single property in the prototype data set, the county record lists 1,240 sq ft of living area. Page 2 of a 2025 inspection report, stored in the loan-servicing system, documents a permitted 840 sq ft addition completed in 2024. No system reconciles the two. As a result, every automated value for this property, and for neighboring properties that used its sale as a comparable, is understated.</p>
+<h3>Objectives</h3>
+<ol>
+<li>Turn unstructured, siloed documents into facts that are cited to the source document and page.</li>
+<li>Answer valuation questions in plain language, in seconds, with traceable evidence.</li>
+<li>Never show a value that the evidence doesn't support, and route those cases to a person.</li>
+<li>Keep valuation math in statistical models, not in the language model.</li>
+<li>Provide a feedback loop that corrects facts and refreshes models on a schedule.</li>
+</ol>
+<h3>Non-goals</h3>
+<ul>
+<li>Replacing licensed appraisers.</li>
+<li>Making credit decisions or setting loan terms.</li>
+<li>Processing real customer data during the prototype phase.</li>
+</ul>
+
+<h2>What we built</h2>
+<h3>Build history</h3>
+<p>The prototype was built in two phases over October 3 and 4, 2026.</p>
+<table border="1" cellpadding="6">
+<tr><th>Phase</th><th>Work completed</th></tr>
+<tr><td><b>Phase 1: Foundation</b> (October 3)</td><td>
+<ul>
+<li>Reviewed the scenario and architecture plan, and evaluated alternatives such as Document AI for lending documents.</li>
+<li>Enabled eight Google Cloud APIs and provisioned Cloud Storage buckets, BigQuery datasets, a BigQuery Cloud resource connection to Vertex AI, a Document AI Layout Parser processor, and Pub/Sub topics. Provisioning used Python SDK scripts that are committed to the repository.</li>
+<li>Generated a synthetic data set: 1,200 properties in four neighborhoods, about 1,950 sales over 36 months, a monthly market index, 6,000 synthetic reviewer decisions on comparable sales, and generated PDF documents.</li>
+<li>Trained seven BigQuery ML models (listed in Appendix A).</li>
+<li>Wrote the deterministic valuation engine and the three risk gates, with unit tests.</li>
+</ul></td></tr>
+<tr><td><b>Phase 2: Pipeline, agent, and experience</b> (October 4)</td><td>
+<ul>
+<li>Corrected valuation math: real comparable distances, the 12-month lookback, and duplicate risk metrics.</li>
+<li>Built the document pipeline: Document AI Layout Parser, then Gemini 2.5 Flash typed extraction, then <code>text-embedding-005</code> embeddings, with results written to BigQuery.</li>
+<li>Connected the app to BigQuery and built a Gemini agent with four tools.</li>
+<li>Deployed the app to Cloud Run.</li>
+<li>Replaced the first interface with a chat assistant. Added BigQuery vector search, multi-turn conversation, explainability panels, a review queue, model health monitoring, and live single-document ingestion.</li>
+<li>Closed guardrail gaps found during testing (described in "Lessons from testing").</li>
+</ul></td></tr>
+</table>
+
+<h3>Capabilities</h3>
+<table border="1" cellpadding="6">
+<tr><th>Capability</th><th>What a user sees</th></tr>
+<tr><td>Ask</td><td>A chat assistant answers questions such as "What's 14 Larkspur Ln worth? It's a refi." Follow-up questions keep context. Every document claim links to the source page.</td></tr>
+<tr><td>Explain</td><td>Each answer shows the issues found by code, a six-step walkthrough of the valuation (comparable sales, market adjustment, feature adjustments, weighting, blending, and safety checks), the documents on file, and the agent's tool calls with their raw inputs and outputs.</td></tr>
+<tr><td>Guard</td><td>When evidence conflicts, the value is withheld and the property is routed to an appraiser. A reviewer can flag a fact for correction with evidence attached. Two independent approvers are required. The person who flagged the fact and anyone with a stake in the loan can't approve it.</td></tr>
+<tr><td>Ingest</td><td>A reviewer can parse a newly landed document from the interface. Each pipeline step is shown as it runs. If a parsed fact conflicts with the system of record, the data quality gate holds it and opens a review item.</td></tr>
+<tr><td>Monitor</td><td>A model health page shows accuracy against sale prices for each neighborhood, and the stricter checks that apply when accuracy drifts.</td></tr>
+</table>
+
+<h2>How it works</h2>
+<p>The following steps describe the flow from a landed document to an answer:</p>
+<ol>
+<li>A PDF lands in the Cloud Storage landing bucket, in a folder for its source system.</li>
+<li>Document AI Layout Parser splits the document into sections, paragraphs, and tables, and keeps the page number of each block.</li>
+<li>Gemini 2.5 Flash extracts typed facts (for example, living area, condition rating, and unrecorded additions). Each fact includes its page and a source quote.</li>
+<li>The data quality gate compares each fact with the system of record. A fact that conflicts with a value-moving field is held, and a review item is opened.</li>
+<li><code>text-embedding-005</code> embeds each paragraph. Blocks, facts, and chunks are written to BigQuery with load jobs.</li>
+<li>When a user asks a question, the Gemini agent calls tools to find the property, search its documents with BigQuery <code>VECTOR_SEARCH</code>, and run the valuation engine.</li>
+<li>The valuation engine selects comparable sales, adjusts them with per-neighborhood regression rates from BigQuery ML, blends the result with a price model, and runs the safety checks. If any check fails, the engine withholds the value.</li>
+<li>The agent writes a short answer that cites document pages. All numbers in the answer come from tool outputs.</li>
+</ol>
+
+<h2>Design decisions</h2>
+<table border="1" cellpadding="6">
+<tr><th>Decision</th><th>Rationale</th><th>Trade-off</th></tr>
+<tr><td>Use BigQuery as the vector store instead of a separate vector database.</td><td>Vectors, extracted facts, and property records live in one governed store, so retrieval and conflict checks are joins.</td><td>At high query volume, move retrieval to Vertex AI Vector Search. Only the retrieval function changes.</td></tr>
+<tr><td>Use Document AI Layout Parser and Gemini instead of plain text extraction.</td><td>Preserves tables, sections, and page numbers, which makes page-level citation possible.</td><td>Adds a per-page parsing cost. Parsing is cached by content hash so each page is parsed once.</td></tr>
+<tr><td>The language model explains; the engine computes.</td><td>Every number traces to a tool output and a reproducible calculation.</td><td>Requires more engineering than a prompt-only RAG approach.</td></tr>
+<tr><td>Hold conflicting facts and require two approvers to change them.</td><td>Prevents one incorrect fact from affecting many valuations, and supports manipulation controls that regulators expect.</td><td>Some answers wait for a person.</td></tr>
+<tr><td>Enforce guardrails in code, not only in the prompt.</td><td>When a value is withheld, the tool doesn't return the range to the model, so the model can't repeat it.</td><td>Requires tests for each guardrail. The prototype includes them.</td></tr>
+</table>
+
+<h2>Model selection</h2>
+<p>Each task uses the simplest model that meets the requirement, and valuation math stays in statistical models that an appraiser or a model validator can inspect. The evidence column shows results measured on the prototype. All data is synthetic, so these results show that the pipeline works, not how the models will perform on your data.</p>
+<table border="1" cellpadding="6">
+<tr><th>Task</th><th>Model</th><th>Why this model</th><th>Alternatives considered</th><th>Evidence from the prototype</th></tr>
+<tr><td>Agent: plan tool calls and write answers</td><td>Gemini 2.5 Flash</td><td>Reliable function calling, low latency, and low cost. The agent explains and cites; it doesn't compute, so it doesn't need the strongest reasoning model.</td><td>Gemini 2.5 Pro (stronger reasoning, higher cost and latency); Gemini 2.5 Flash-Lite (lower cost); open models in Vertex AI Model Garden (more to operate)</td><td>In 3 of 3 runs of the demo question, the agent called all three tools and cited the correct page. 5–10 seconds and about $0.0033 per answer.</td></tr>
+<tr><td>Extract typed facts from documents</td><td>Gemini 2.5 Flash with JSON output</td><td>Handles varied layouts and wording without labeled training data, and returns typed fields with a page and source quote.</td><td>Document AI Custom Extractor (more consistent on fixed forms such as standard appraisal forms, but needs labeled examples); Gemini 2.5 Flash-Lite (lower cost)</td><td>Extracted condition C4 from page 2 of a newly ingested inspection. Most extraction output is model thinking, so a capped thinking budget lowers cost.</td></tr>
+<tr><td>Parse PDF layout</td><td>Document AI Layout Parser</td><td>Preserves sections, tables, reading order, and page numbers, and includes chunking.</td><td>Enterprise Document OCR (text only, no structure); Form Parser (key-value pairs, $30 per 1,000 pages); sending PDFs directly to Gemini (no stable page structure for citations)</td><td>Parsed a 2-page inspection into 11 blocks in about 3 seconds, with page numbers on every block.</td></tr>
+<tr><td>Embed text for retrieval</td><td><code>text-embedding-005</code> (768 dimensions)</td><td>Strong English retrieval at low cost ($0.000025 per 1,000 characters), and works directly with BigQuery vector search.</td><td><code>gemini-embedding-001</code> (higher quality and multilingual, about 6 times the price per character)</td><td>For "Has the house been expanded?", the inspection paragraph about the addition ranked first (similarity 0.71–0.78), followed by the permit.</td></tr>
+<tr><td>Feature adjustment rates for comparable sales</td><td>BigQuery ML linear regression, one model per neighborhood (<code>adj_*_v1</code>)</td><td>The coefficients are the adjustments an appraiser uses (dollars per square foot, per bedroom, per condition grade), so they're interpretable and auditable. One model per neighborhood captures local pricing.</td><td>Gradient-boosted trees with Shapley explanations (more accurate, less transparent); paired-sales analysis (manual)</td><td>Larkspur: R² 0.97 in BigQuery ML evaluation. Coefficients have the expected signs: $235 per sq ft, +$16,201 per bedroom, −$26,112 per condition grade worse.</td></tr>
+<tr><td>Independent price estimate (AVM)</td><td>BigQuery ML boosted tree regressor (<code>avm_v1</code>)</td><td>Strong accuracy on tabular data with nonlinear effects, and per-prediction explanations with <code>ML.EXPLAIN_PREDICT</code>.</td><td>Vertex AI AutoML Tabular or custom XGBoost training; hedonic linear regression</td><td>On a time-based holdout of the most recent 4 months (199 sales): median absolute error 6.3%, 90th percentile 14%, R² 0.93. Not yet connected to the app; the app uses a formula (see FAQ).</td></tr>
+<tr><td>Market index and time adjustment</td><td>BigQuery ML ARIMA_PLUS, one series per neighborhood (<code>market_index_arima_v1</code>)</td><td>Fits short monthly series, selects model order automatically, handles drift, and forecasts with intervals.</td><td>TimesFM through BigQuery <code>AI.FORECAST</code> (zero-shot foundation model, worth testing on sparse neighborhoods); Prophet</td><td>Selected ARIMA(0,1,1) for each neighborhood, with drift in three of four. The index uses a 3-month moving average of actual prices plus a 6-month forecast.</td></tr>
+<tr><td>Rank candidate comparable sales</td><td>BigQuery ML boosted tree classifier (<code>comp_ranker_v1</code>)</td><td>Intended to learn which comparables reviewers keep or reject.</td><td>Rule-based similarity score (used instead)</td><td><b>Did not learn:</b> ROC AUC 0.48 and recall 4%. The synthetic reviewer decisions carried no learnable signal and were imbalanced (11% accepted). The app doesn't use this model; it ranks comparables with a transparent similarity score (distance, recency, size, quality, and condition).</td></tr>
+</table>
+
+<h2>Lessons from testing</h2>
+<p>Testing found the following issues. Each is fixed in the prototype and, where noted, covered by an automated test.</p>
+<ul>
+<li><b>The model added numbers on its own.</b> The agent combined 1,240 and 840 into a total that appears in no document. The prompt now forbids combining numbers.</li>
+<li><b>The model stated a withheld range.</b> For a property routed to an appraiser, the model repeated the range from the tool output. The tool now omits the range when a value is withheld. A test covers this case.</li>
+<li><b>The model cited checks that had passed.</b> The agent now reports only the reasons that the engine returns.</li>
+<li><b>An early version of the interface displayed numbers that were not computed.</b> The current interface builds every figure from engine output.</li>
+<li><b>Model quota limits occurred during testing.</b> Calls now retry, fall back to the global endpoint, and then show a clearly labeled saved answer.</li>
+</ul>
+
+<h2>Measured results</h2>
+<p>The following measurements come from the prototype running on Cloud Run in <code>us-central1</code>.</p>
+<table border="1" cellpadding="6">
+<tr><th>Measure</th><th>Result</th></tr>
+<tr><td>Time from a landed PDF to searchable, cited facts (2-page document)</td><td>About 10 seconds</td></tr>
+<tr><td>Time to answer a question (4 model calls)</td><td>5–10 seconds after warm-up</td></tr>
+<tr><td>Values shown while a value-moving fact is held</td><td>0</td></tr>
+<tr><td>Approvers required to change a value-moving fact</td><td>2, enforced by the server</td></tr>
+<tr><td>Automated tests</td><td>21 passing</td></tr>
+</table>
+
+<h2>Cost estimate</h2>
+<p>The following estimate uses Google Cloud list prices for <code>us-central1</code> as of October 2026, and token counts measured on the prototype. It excludes staff and support costs.</p>
+<table border="1" cellpadding="6">
+<tr><th>Item</th><th>Basis</th><th>Cost</th></tr>
+<tr><td>Document AI Layout Parser</td><td>$10 per 1,000 pages</td><td>$0.0100 per page</td></tr>
+<tr><td>Gemini 2.5 Flash extraction</td><td>About 1,000 input and 1,250 output tokens per page</td><td>$0.0034 per page</td></tr>
+<tr><td><code>text-embedding-005</code></td><td>$0.000025 per 1,000 characters</td><td>$0.0001 per page</td></tr>
+<tr><td><b>Total per page parsed</b></td><td></td><td><b>About $0.014</b></td></tr>
+<tr><td>Gemini 2.5 Flash, per answer</td><td>4 calls, 5,862 input and 607 output tokens (measured)</td><td>$0.0033 per answer</td></tr>
+<tr><td>BigQuery vector search</td><td>Within the 1 TiB monthly free tier at pilot volume</td><td>$0</td></tr>
+</table>
+<p><b>Illustrative pilot.</b> For one county with 100,000 pages of backlog and 20,000 questions a month, the estimate is about $1,350 one time to parse the backlog, and about $110 a month to run (answers about $66, one always-on Cloud Run instance about $44, BigQuery $0 within free tiers). These volumes are assumptions; we'll size the pilot with your actual volumes.</p>
+<p>To reduce cost, consider a Document AI savings plan ($8 per 1,000 pages), a capped Gemini thinking budget for extraction, and parsing only new or changed documents.</p>
+
+<h2>FAQ: scope and production readiness</h2>
+<p>Each answer describes what the prototype does today and what a production deployment needs.</p>
+
+<h3>Data and ingestion</h3>
+<p><b>Does the prototype use real customer data?</b></p>
+<p><i>In the prototype:</i> No. All data is synthetic, set in a fictional town (Cedar Hollow) with 1,200 properties, about 1,950 sales, and five generated PDF documents.</p>
+<p><i>In production:</i> Start with a data-sharing agreement, a de-identified pilot sample, and a decision on data residency.</p>
+
+<p><b>How many documents does the prototype parse?</b></p>
+<p><i>In the prototype:</i> Five PDFs (two inspections, two appraisals, and a permit) are parsed through Document AI and Gemini, including one parsed live in the demo.</p>
+<p><i>In production:</i> Use Document AI batch processing from Cloud Storage. Trigger it with an Eventarc or Pub/Sub notification when a file lands, and add retries and a dead-letter queue.</p>
+
+<p><b>How does the system handle scanned, skewed, or handwritten documents?</b></p>
+<p><i>In the prototype:</i> The demo PDFs are clean, digitally generated files.</p>
+<p><i>In production:</i> Use Document AI quality scores to route low-quality pages to Gemini multimodal reading or to a person, and track extraction accuracy for each document type.</p>
+
+<p><b>How does the system match a document to the right property?</b></p>
+<p><i>In the prototype:</i> A manifest links each document to a property, and the assistant recognizes the five demo addresses by name.</p>
+<p><i>In production:</i> Implement entity resolution with address normalization, parcel number (APN) matching, and fuzzy matching. Send low-confidence matches to a review queue.</p>
+
+<p><b>How does the system classify document types?</b></p>
+<p><i>In the prototype:</i> The manifest records each document type.</p>
+<p><i>In production:</i> Use a Document AI classifier or Gemini to label appraisals, inspections, permits, HOA documents, and disclosures, and to split combined PDFs.</p>
+
+<p><b>Is the fact confidence score meaningful?</b></p>
+<p><i>In the prototype:</i> No. Every fact receives a placeholder confidence of 0.9.</p>
+<p><i>In production:</i> Compute confidence from Document AI layout confidence, a Gemini check against the source quote, and agreement across documents. Calibrate it against human review.</p>
+
+<p><b>Which fields does the system extract?</b></p>
+<p><i>In the prototype:</i> Nine fields: living area, bedrooms, bathrooms, year built, lot size, condition, quality, unrecorded additions, and permit number.</p>
+<p><i>In production:</i> Extend the typed schema for each document type (for example, HOA dues, liens, disclosures, and roof age) and manage it under version control.</p>
+
+<p><b>What happens when a document is updated or resent?</b></p>
+<p><i>In the prototype:</i> Parsing a document again replaces its rows.</p>
+<p><i>In production:</i> Keep every version. Store a content hash for each file so unchanged files are skipped, and keep facts bitemporal so you can answer "What did we know on the loan date?"</p>
+
+<p><b>How does the system handle personal information?</b></p>
+<p><i>In the prototype:</i> It doesn't. The <code>pii_findings</code> field exists but is always 0.</p>
+<p><i>In production:</i> Run Sensitive Data Protection on every chunk before embedding, mask names and loan numbers, and apply BigQuery column-level security and policy tags.</p>
+
+<h3>Retrieval and AI</h3>
+<p><b>Is the vector search indexed?</b></p>
+<p><i>In the prototype:</i> No. With fewer than 100 chunks, <code>VECTOR_SEARCH</code> scans every row, which is exact and fast.</p>
+<p><i>In production:</i> Create a BigQuery vector index when the table grows large, and move to Vertex AI Vector Search if query volume requires millisecond latency.</p>
+
+<p><b>Does the system use hybrid search or reranking?</b></p>
+<p><i>In the prototype:</i> No. It uses semantic search, filtered to one property.</p>
+<p><i>In production:</i> Add keyword matching for exact terms such as permit numbers and addresses, and rerank results with the Vertex AI ranking API.</p>
+
+<p><b>How do you measure answer quality?</b></p>
+<p><i>In the prototype:</i> Through unit tests and manual review during the build.</p>
+<p><i>In production:</i> Build an evaluation set of real questions with expected facts and citations. Score groundedness, citation accuracy, and refusal behavior with the Gen AI evaluation service in Vertex AI, and run it on every prompt or model change.</p>
+
+<p><b>Can a document manipulate the model (prompt injection)?</b></p>
+<p><i>In the prototype:</i> Documents are passed to the model as data, but there's no dedicated defense.</p>
+<p><i>In production:</i> Screen inputs and retrieved text with Model Armor, and keep the rule that the model never produces a number on its own.</p>
+
+<p><b>What happens when Gemini reaches a quota limit?</b></p>
+<p><i>In the prototype:</i> The app retries, falls back to the global endpoint, and then shows a saved answer with a clear label. The saved-answer fallback is for demos only.</p>
+<p><i>In production:</i> Use Provisioned Throughput for predictable load, and alert on quota errors.</p>
+
+<p><b>Are answers and tool calls recorded?</b></p>
+<p><i>In the prototype:</i> Fact-level lineage is stored in BigQuery: the source document, page, source quote, extracting model, status, hold reasons, and timestamps. Answers and tool calls are shown in the interface but aren't stored.</p>
+<p><i>In production:</i> Write every answer to BigQuery with the question, user, model version, tool calls and outputs, cited pages, valuation ID, and latency, so every answer is reproducible and auditable.</p>
+
+<p><b>Are model versions pinned?</b></p>
+<p><i>In the prototype:</i> The app calls <code>gemini-2.5-flash</code> and <code>text-embedding-005</code> by name.</p>
+<p><i>In production:</i> Pin versions, re-embed all chunks when the embedding model changes, and test prompts against the evaluation set before an upgrade.</p>
+
+<h3>Valuation and models</h3>
+<p><b>Does the app use the trained BigQuery ML valuation model?</b></p>
+<p><i>In the prototype:</i> Not yet. The app's price model is a formula: the neighborhood median price per square foot multiplied by living area, adjusted for bathrooms and condition. A trained gradient-boosted tree model, <code>avm_v1</code>, exists in BigQuery ML but isn't connected.</p>
+<p><i>In production:</i> Call <code>avm_v1</code>, retrain it on a schedule, and promote new versions through a champion-challenger evaluation.</p>
+
+<p><b>Where do the adjustment rates come from?</b></p>
+<p><i>In the prototype:</i> From per-neighborhood linear regression models in BigQuery ML, with fixed fallback rates if they can't be loaded.</p>
+<p><i>In production:</i> Have an appraisal expert review the rates, and limit how much a rate can change in one retraining cycle.</p>
+
+<p><b>When a fact is corrected, are dependent valuations updated?</b></p>
+<p><i>In the prototype:</i> The corrected property is re-valued. Re-valuing other properties that used it as a comparable is designed but not implemented.</p>
+<p><i>In production:</i> Find every valuation that used the corrected sale as a comparable, re-run it, and notify the owners of any value that changes.</p>
+
+<p><b>Is market drift monitoring live?</b></p>
+<p><i>In the prototype:</i> No. The drift in the Riverside neighborhood is seeded data.</p>
+<p><i>In production:</i> Run a scheduled Cloud Run job that compares recent sale prices with the values shown before listing, and tightens the safety checks automatically.</p>
+
+<p><b>How does the design address model risk management and fair lending?</b></p>
+<p><i>In the prototype:</i> These are out of scope. The design supports them because values come from a deterministic, explainable engine rather than the language model.</p>
+<p><i>In production:</i> Provide model validation documentation, test for bias and disparate impact across neighborhoods, and enforce appraisal independence requirements.</p>
+
+<p><b>Can a licensed appraiser sign off on a value?</b></p>
+<p><i>In the prototype:</i> The sign-off step is designed and has a BigQuery table, but the interface doesn't include it.</p>
+<p><i>In production:</i> Add appraiser sign-off with credential verification, an electronic signature, and a locked record.</p>
+
+<h3>Models and model selection</h3>
+<p><b>Why doesn't the language model calculate the value?</b></p>
+<p><i>In the prototype:</i> Language models generate plausible numbers, not reproducible ones, and a lender has to trace every value to its inputs. The valuation engine computes; Gemini explains. When the engine withholds a value, the tool doesn't return the range, so the model can't state it.</p>
+<p><i>In production:</i> Keep this separation. It lets you validate the valuation models under your model risk management process without validating a language model's arithmetic.</p>
+
+<p><b>Why BigQuery ML instead of custom training on Vertex AI?</b></p>
+<p><i>In the prototype:</i> The training data already lives in BigQuery. BigQuery ML trains, evaluates, explains, and serves models in SQL, without moving data or running training infrastructure.</p>
+<p><i>In production:</i> Keep BigQuery ML for the regression adjustments, the market index, and the first AVM. Move a model to Vertex AI (AutoML Tabular or custom training) only if it needs a model type or tuning that BigQuery ML doesn't support. Register models in Vertex AI Model Registry either way.</p>
+
+<p><b>Why Gemini 2.5 Flash instead of Gemini 2.5 Pro?</b></p>
+<p><i>In the prototype:</i> The agent's job is tool selection and short, cited explanations. Flash did that correctly in every test run, at 5–10 seconds and about a third of a cent per answer.</p>
+<p><i>In production:</i> Decide with the evaluation set. Test Pro for complex multi-document questions and Flash-Lite for extraction, and choose per task on accuracy, latency, and cost.</p>
+
+<p><b>Why linear regression for adjustments when boosted trees are more accurate?</b></p>
+<p><i>In the prototype:</i> Adjustments must be explainable to an appraiser and a regulator. A regression coefficient is the adjustment ("$235 per square foot"); a tree ensemble needs a separate explanation method.</p>
+<p><i>In production:</i> Keep regression for adjustments, use the boosted tree model as an independent check, and investigate when the two disagree (the prototype already withholds the value when the gap is too large).</p>
+
+<p><b>Why ARIMA_PLUS for the market index? Did you consider TimesFM?</b></p>
+<p><i>In the prototype:</i> ARIMA_PLUS fits short monthly series per neighborhood with automatic model selection. TimesFM, available in BigQuery through <code>AI.FORECAST</code>, was considered but not tested.</p>
+<p><i>In production:</i> Back-test both on the customer's history. TimesFM needs no training and can help in neighborhoods with few sales.</p>
+
+<p><b>Why did the comparable-sales ranker fail, and what replaces it?</b></p>
+<p><i>In the prototype:</i> It was trained on 6,000 synthetic reviewer decisions that carried no real signal, with only 11% positive labels. It scored ROC AUC 0.48, which is no better than chance, so the app doesn't use it. Comparables are ranked by a transparent similarity score instead.</p>
+<p><i>In production:</i> Train the ranker on real reviewer keep-or-reject decisions, use class weights for the imbalance, and promote it only if it beats the similarity score on held-out decisions.</p>
+
+<p><b>How do you know the models are accurate enough?</b></p>
+<p><i>In the prototype:</i> The AVM uses a time-based holdout (the most recent 4 months) and reports median absolute error of 6.3% on synthetic data. The safety checks withhold a value when comparables are too spread out or disagree with the price model.</p>
+<p><i>In production:</i> Measure median absolute percentage error and bias for each neighborhood against new closed sales, keep a gold set of corrected properties, and promote a new model only when it beats the current one (champion-challenger).</p>
+
+<p><b>How often are the models refreshed, and how do corrections feed back?</b></p>
+<p><i>In the prototype:</i> Models were trained once. Corrections update facts immediately, and the engine re-runs with the corrected fact.</p>
+<p><i>In production:</i> Retrain the AVM and adjustment models monthly and the market index as new sales close, with scheduled queries or Vertex AI Pipelines. Closed sales are the only training labels. Reviewer overrides feed evaluation and gate tuning, never training, so a mistaken override can't teach the model.</p>
+
+<h3>Security, governance, and compliance</h3>
+<p><b>How do users authenticate?</b></p>
+<p><i>In the prototype:</i> They don't. A menu switches between four fictional users.</p>
+<p><i>In production:</i> Use Identity-Aware Proxy with Google identities, and assign roles (reviewer, data steward, loan officer, and appraiser) from groups.</p>
+
+<p><b>What permissions does the service use?</b></p>
+<p><i>In the prototype:</i> The Cloud Run service account has the Owner role, which is broader than needed.</p>
+<p><i>In production:</i> Grant least-privilege roles: BigQuery Data Editor and BigQuery Job User on specific datasets, Document AI API User, Vertex AI User, and Storage Object Viewer on the landing bucket.</p>
+
+<p><b>Where are flags, approvals, and corrections stored?</b></p>
+<p><i>In the prototype:</i> In memory, on a single Cloud Run instance. The BigQuery tables for them exist in the <code>val_ops</code> dataset but aren't written to. The Pub/Sub topics exist but have no subscriptions.</p>
+<p><i>In production:</i> Write flags, decisions, and corrections append-only to BigQuery, and publish events to Pub/Sub so downstream systems can react.</p>
+
+<p><b>Which data protection controls are in place?</b></p>
+<p><i>In the prototype:</i> Google Cloud default encryption.</p>
+<p><i>In production:</i> Add VPC Service Controls around BigQuery, Vertex AI, and Document AI; customer-managed encryption keys if required; a defined data residency region; retention and deletion policies; and Cloud Audit Logs exported to a locked bucket.</p>
+
+<p><b>Is the two-approver rule enforced?</b></p>
+<p><i>In the prototype:</i> Yes. The server rejects approvals from the person who flagged the fact and from the loan officer, and automated tests cover both cases.</p>
+<p><i>In production:</i> Source conflict-of-interest data from the loan origination system instead of a fixed setting.</p>
+
+<h3>Operations</h3>
+<p><b>How is the prototype deployed?</b></p>
+<p><i>In the prototype:</i> From a workstation with <code>gcloud run deploy --source</code>. Terraform files exist in the repository but haven't been applied; resources were created with SDK scripts.</p>
+<p><i>In production:</i> Manage all infrastructure with Terraform, deploy through Cloud Build, use separate development, test, and production projects, and scan images in Artifact Registry.</p>
+
+<p><b>How is the service monitored?</b></p>
+<p><i>In the prototype:</i> With a health check only.</p>
+<p><i>In production:</i> Add Cloud Monitoring dashboards and alerts for latency, errors, quota errors, ingestion backlog, and the rate of held facts. Define service level objectives, for example "95% of answers in under 10 seconds."</p>
+
+<p><b>How does the service scale and recover from failure?</b></p>
+<p><i>In the prototype:</i> One instance in one region, without load testing.</p>
+<p><i>In production:</i> Autoscale Cloud Run after state moves to BigQuery, load-test to expected peak, and document recovery objectives and a regional failover plan.</p>
+
+<p><b>How are costs controlled?</b></p>
+<p><i>In the prototype:</i> There are no budgets or alerts.</p>
+<p><i>In production:</i> Set budgets and alerts, cache parsing by content hash, cap the Gemini thinking budget for extraction, and use batch pricing for backlogs.</p>
+
+<h3>Product and integration</h3>
+<p><b>How does the assistant fit into existing workflows?</b></p>
+<p><i>In the prototype:</i> It's a standalone web app.</p>
+<p><i>In production:</i> Integrate with the loan origination and servicing systems through APIs or events, so documents arrive automatically and answers appear where underwriters already work.</p>
+
+<p><b>Has the interface been tested for accessibility and usability?</b></p>
+<p><i>In the prototype:</i> It follows a design system with contrast, keyboard focus, and light and dark themes, but it hasn't had an accessibility audit or usability testing.</p>
+<p><i>In production:</i> Complete both with appraisal reviewers.</p>
+
+<h2>Recommended next steps</h2>
+<table border="1" cellpadding="6">
+<tr><th>Timeline</th><th>Phase</th><th>Scope</th></tr>
+<tr><td>Days 0–30</td><td>Pilot</td><td>One county and a de-identified sample of real documents. Success criteria: extracted facts match appraiser review, and fewer valuations require rework.</td></tr>
+<tr><td>Days 30–90</td><td>Harden</td><td>Identity-Aware Proxy and least-privilege IAM, persistent review state and answer logs in BigQuery, the <code>avm_v1</code> model connected, and an evaluation set.</td></tr>
+<tr><td>Day 90 onward</td><td>Scale</td><td>Document AI batch processing, more counties and document types, and drift monitoring for each neighborhood.</td></tr>
+</table>
+<p><b>Decision needed:</b> Which county and which document types should the pilot start with?</p>
+
+<h2>Appendix A: Google Cloud resources in the prototype</h2>
+<table border="1" cellpadding="6">
+<tr><th>Service</th><th>Resources</th></tr>
+<tr><td>Cloud Storage</td><td>Landing, evidence, and cache buckets</td></tr>
+<tr><td>Document AI</td><td>One Layout Parser processor (<code>us</code>)</td></tr>
+<tr><td>Vertex AI</td><td><code>gemini-2.5-flash</code> for extraction and the agent; <code>text-embedding-005</code> for embeddings</td></tr>
+<tr><td>BigQuery</td><td>Four datasets: <code>val_raw</code> (landed documents and parser output), <code>val_core</code> (properties, sales, facts, chunks, and valuations), <code>val_ml</code> (training data and adjustment grids), and <code>val_ops</code> (governance tables). One Cloud resource connection to Vertex AI.</td></tr>
+<tr><td>BigQuery ML</td><td><code>market_index_arima_v1</code> (ARIMA_PLUS market index), <code>comp_ranker_v1</code> (boosted tree classifier for comparable sales; not used, see Model selection), <code>adj_larkspur_v1</code>, <code>adj_old_town_v1</code>, <code>adj_hilltop_v1</code>, <code>adj_riverside_v1</code> (linear regression adjustment rates), and <code>avm_v1</code> (boosted tree regressor)</td></tr>
+<tr><td>Pub/Sub</td><td><code>flags</code> and <code>corrections</code> topics (no subscriptions yet)</td></tr>
+<tr><td>Cloud Run</td><td>Service <code>val-valuation-app</code> in <code>us-central1</code>, one instance</td></tr>
+</table>
+
+<h2>Appendix B: References</h2>
+<ul>
+<li>Document AI pricing: https://cloud.google.com/document-ai/pricing</li>
+<li>Vertex AI generative AI pricing: https://cloud.google.com/vertex-ai/generative-ai/pricing</li>
+<li>BigQuery pricing: https://cloud.google.com/bigquery/pricing</li>
+<li>Cloud Run pricing: https://cloud.google.com/run/pricing</li>
+<li>BigQuery vector search: https://cloud.google.com/bigquery/docs/vector-search-intro</li>
+<li>Document AI Layout Parser: https://cloud.google.com/document-ai/docs/layout-parse-chunk</li>
+</ul>
+
+</body>
+</html>

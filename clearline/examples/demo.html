@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clearline — example screen</title>
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="../components/clearline.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="../components/clearline.umd.js"></script>
+<style>
+  .page { max-width: 1200px; margin: 0 auto; padding: var(--space-7); display: flex; flex-direction: column; gap: var(--space-6); }
+  .hero { display: flex; flex-direction: column; gap: var(--space-2); }
+  .hero h1, .hero p { margin: 0; }
+  .hero p { color: var(--ink-muted); max-width: 640px; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-5); }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+  @media (max-width: 640px) { .page { padding: var(--space-4); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+var C = window.Clearline, h = React.createElement;
+function App() {
+  var th = React.useState('light');
+  function toggle() { var n = th[0] === 'light' ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', n); th[1](n); }
+  return h(React.Fragment, null,
+    h(C.TopBar, { product: 'Relay', context: 'Charter ops / Agent runs', actions: h(React.Fragment, null,
+      h(C.Button, { variant: 'ghost', size: 'sm', icon: th[0] === 'light' ? 'dark_mode' : 'light_mode', onClick: toggle }, th[0] === 'light' ? 'Dark' : 'Light'),
+      h(C.Button, { size: 'sm', icon: 'play_arrow' }, 'Run demo')) }),
+    h('main', { className: 'page' },
+      h('div', { className: 'hero' },
+        h('h1', { className: 'display' }, 'Quote a trip in under a minute'),
+        h('p', { className: 'body-lg' }, 'Describe the trip. The agent pulls operator availability, ranks aircraft by price and safety, and drafts the quote.')),
+      h(C.PromptBox, { placeholder: 'Route, dates, passengers…', meta: 'gemini-2.5-pro · 3 tools', defaultValue: 'Light jet, Charlotte to Key West, Friday 9am, 4 passengers' }),
+      h(C.Banner, { title: 'Demo mode', action: h(C.Button, { variant: 'ghost', size: 'sm' }, 'Switch to live') }, 'Responses are replayed from a recorded run so the walkthrough is repeatable.'),
+      h('div', { className: 'metrics' },
+        h(C.Metric, { label: 'Quote turnaround', value: '42', unit: 'sec', trend: 'down', good: true, delta: '−94% vs. manual' }),
+        h(C.Metric, { label: 'Agent success rate', value: '97.2', unit: '%', trend: 'up', delta: '+3.1 pts' }),
+        h(C.Metric, { label: 'Cost per run', value: '$0.018', trend: 'neutral', delta: 'Flat week over week' })),
+      h('div', { className: 'toolbar' },
+        h(C.Tabs, { label: 'Run views', items: [{ value: 'runs', label: 'Recent runs', count: 4 }, { value: 'trace', label: 'Trace' }, { value: 'evals', label: 'Evals' }] }),
+        h(C.Switch, { label: 'Show tool calls', defaultChecked: true })),
+      h(C.Table, { caption: 'Recent runs', columns: [
+          { key: 'id', label: 'Run', mono: true }, { key: 'task', label: 'Task' },
+          { key: 'status', label: 'Status', render: function (r) { return h(C.Badge, { tone: r.tone }, r.status); } },
+          { key: 'latency', label: 'Latency', align: 'right' }, { key: 'cost', label: 'Cost', align: 'right' }],
+        rows: [
+          { id: 'run_8f2a', task: 'Quote CLT → EYW', status: 'Succeeded', tone: 'success', latency: '38.4 s', cost: '$0.021' },
+          { id: 'run_8f29', task: 'Crew availability check', status: 'Running', tone: 'brand', latency: '—', cost: '—' },
+          { id: 'run_8f27', task: 'Fuel stop planning', status: 'Needs review', tone: 'warning', latency: '51.0 s', cost: '$0.034' },
+          { id: 'run_8f25', task: 'Invoice reconciliation', status: 'Failed', tone: 'danger', latency: '12.7 s', cost: '$0.006' }] })));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

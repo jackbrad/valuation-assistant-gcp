@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.DS_Store
+
+# Credentials and secrets
+*.json
+.env
+
+# Generated data: keep only the document manifest and demo PDFs
+data_gen/out/*
+!data_gen/out/manifest.jsonl
+!data_gen/out/pdfs/
+data_gen/out/chat_cache/

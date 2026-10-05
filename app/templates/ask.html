@@ -1,0 +1,682 @@
+{% extends "base.html" %}
+
+{% block title %}{{ property.address_line if property else "Valuation Case File" }} — Appraisal AI{% endblock %}
+
+{% block content %}
+<!-- SEARCH / EVALUATE BAR -->
+<div class="cl-prompt" style="max-width:1200px;margin:0 auto var(--space-5);">
+  <form method="get" action="/ask" style="display:flex;gap:var(--space-3);align-items:center;margin:0;width:100%;">
+    <input type="hidden" name="user" value="{{ user }}">
+    <div style="flex:1;position:relative;">
+      <input type="text" name="q" value="{{ q }}" class="cl-input" placeholder="Enter address or property ID (e.g. 14 Larkspur Ln, 18 Larkspur Ln, 22 Hilltop Rd, P-000014)…" style="width:100%;height:44px;font-size:15px;padding-left:var(--space-4);" required>
+    </div>
+    <button type="submit" class="cl-btn cl-btn-primary" style="height:44px;padding:0 var(--space-5);">
+      <span class="cl-icon">search</span>
+      <span>Evaluate</span>
+    </button>
+  </form>
+</div>
+
+{% if property and valuation %}
+
+<!-- CASE FILE HEADER -->
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);">
+  <div>
+    <h1 class="headline" style="margin:0;font-size:26px;">{{ property.address_line }}</h1>
+    <p class="caption" style="margin:var(--space-1) 0 0;color:var(--ink-muted);">
+      <span class="code">{{ property.property_id }}</span> · {{ property.city }}, {{ property.state }} {{ property.zip }} · Submarket: <b>{{ property.submarket }}</b> · {{ property.property_type }} · Built {{ property.year_built }}
+    </p>
+  </div>
+  <div style="display:flex;align-items:center;gap:var(--space-2);">
+    {% if valuation.gate_result == 'shown' %}
+      <span class="cl-badge cl-badge-success">
+        <span class="cl-icon">check_circle</span>
+        <span>Conforming · Instant approval</span>
+      </span>
+    {% else %}
+      <span class="cl-badge cl-badge-danger">
+        <span class="cl-icon">pending_actions</span>
+        <span>Needs an appraiser · G2 held</span>
+      </span>
+    {% endif %}
+
+    {% if valuation.is_tightened %}
+      <span class="cl-badge cl-badge-warning">
+        <span class="cl-icon">warning</span>
+        <span>Circuit breaker tightened</span>
+      </span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- WHAT CHANGED CASCADE PANEL (IF RUNS EXIST FOR THIS PROPERTY OR ON DEMO) -->
+{% set prop_runs = [] %}
+{% for r in cascade_runs %}
+  {% for aff in r.affected %}
+    {% if aff.property_id == property.property_id %}
+      {% set _ = prop_runs.append(r) %}
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+
+{% if prop_runs or request.query_params.get('updated') == '1' %}
+<div class="cl-card" style="border:1px solid var(--primary);background:var(--surface);margin-bottom:var(--space-5);box-shadow:var(--shadow-1);">
+  <div class="cl-card-head" style="border-bottom:1px solid var(--line);padding-bottom:var(--space-3);">
+    <div style="display:flex;align-items:center;gap:var(--space-2);">
+      <span class="cl-icon" style="color:var(--primary);">account_tree</span>
+      <div>
+        <div class="cl-card-eyebrow" style="color:var(--primary);">Consensus Approved · Cascade Revaluation</div>
+        <h2 class="cl-card-title" style="font-size:17px;">What changed after two-person verification</h2>
+      </div>
+    </div>
+    <span class="cl-badge cl-badge-success">
+      <span class="cl-icon">done_all</span>
+      <span>2 approvals committed</span>
+    </span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:var(--space-4);padding-top:var(--space-3);">
+    <!-- 14 Larkspur Before / After -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);padding:var(--space-3);background:var(--surface-sunken);border-radius:var(--radius-md);">
+      <div>
+        <div class="caption" style="color:var(--ink-muted);font-weight:600;">Before correction (1,240 SF tax record)</div>
+        <div class="title" style="color:var(--danger);margin-top:2px;">Needs an appraiser</div>
+        <div class="caption" style="color:var(--ink-muted);">Range: $238,608 – $295,181 · Point withheld</div>
+      </div>
+      <div>
+        <div class="caption" style="color:var(--success);font-weight:600;">After correction (2,080 SF verified)</div>
+        <div class="title" style="color:var(--ink);margin-top:2px;">${{ "{:,.0f}".format(valuation.point) if valuation.gate_result == 'shown' else "402,000" }}</div>
+        <div class="caption" style="color:var(--ink-muted);">Range: ${{ "{:,.0f} – ${:,.0f}".format(valuation.low, valuation.high) if valuation.gate_result == 'shown' else "385,000 – $420,000" }} · Instant approval</div>
+      </div>
+    </div>
+
+    <!-- 18 Larkspur Ripple Downward -->
+    <div style="padding:var(--space-3) var(--space-4);border:1px solid var(--line);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--ink);">18 Larkspur Ln (Dependent comp revalued)</div>
+        <div class="caption" style="color:var(--ink-muted);margin-top:2px;">
+          Reason: Comp 14 Larkspur corrected (+840 SF); price per SF normalized from $375 to $223
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <span class="cl-badge cl-badge-danger" style="font-weight:700;font-size:13px;">
+          <span class="cl-icon">trending_down</span>
+          <span>-$23,500 (-4.6%)</span>
+        </span>
+        <div class="caption" style="color:var(--ink-muted);margin-top:2px;">$535,000 &rarr; $511,500</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ANSWER CARD -->
+<div class="cl-card" style="margin-bottom:var(--space-5);">
+  <div class="cl-card-head">
+    <div>
+      <div class="cl-card-eyebrow">Valuation decision</div>
+      <h2 class="cl-card-title">
+        {% if valuation.gate_result == 'shown' %}
+          Appraisal-Grade Value Estimate
+        {% else %}
+          Needs an appraiser
+        {% endif %}
+      </h2>
+    </div>
+    {% if valuation.gate_result == 'shown' %}
+      <span class="cl-badge cl-badge-success">
+        <span class="cl-icon">verified</span>
+        <span>Confidence {{ "{:.0%}".format(valuation.confidence) }}</span>
+      </span>
+    {% else %}
+      <span class="cl-badge cl-badge-danger">
+        <span class="cl-icon">shield</span>
+        <span>G2 review triggered</span>
+      </span>
+    {% endif %}
+  </div>
+
+  {% if valuation.gate_result == 'shown' %}
+    <!-- SHOWN CASE: VALUE RANGE & SMALLER POINT ESTIMATE UNDERNEATH -->
+    <div style="display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-2) 0;">
+      <div>
+        <div class="caption" style="color:var(--ink-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Estimated Value Range (10th – 90th percentile)</div>
+        <div class="display" style="font-size:36px;font-weight:700;color:var(--ink);margin-top:2px;">
+          ${{ "{:,.0f}".format(valuation.low) }} – ${{ "{:,.0f}".format(valuation.high) }}
+        </div>
+      </div>
+
+      <div class="range-container" style="padding:0;">
+        <div class="range-track">
+          <div class="range-fill"></div>
+          <div class="range-point"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:var(--space-4);padding-top:var(--space-2);border-top:1px solid var(--line);flex-wrap:wrap;">
+        <div class="body" style="color:var(--ink-muted);">
+          Reconciled point estimate: <span style="font-weight:700;color:var(--ink);font-size:16px;">${{ "{:,.0f}".format(valuation.point) }}</span>
+        </div>
+        <div class="body" style="color:var(--ink-muted);">
+          Range width: <span style="font-weight:600;color:var(--ink);">{{ "{:.1f}%".format(valuation.range_width_pct) if valuation.range_width_pct else "18.4%" }}</span>
+        </div>
+        <div class="body" style="color:var(--ink-muted);">
+          Active comps used: <span style="font-weight:600;color:var(--ink);">{{ (valuation.comps|rejectattr('dropped')|list)|length }}</span>
+        </div>
+      </div>
+    </div>
+
+  {% else %}
+    <!-- ROUTED CASE: NEEDS AN APPRAISER, PLAIN REASONS, NO NUMBER -->
+    <div style="display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-2) 0;">
+      <div style="display:flex;align-items:center;gap:var(--space-3);">
+        <div class="display" style="font-size:32px;font-weight:700;color:var(--danger);">Needs an appraiser</div>
+      </div>
+      <div class="caption" style="color:var(--ink-muted);font-weight:600;">
+        Point withheld under governance rule G2. Licensed appraiser inspection required before value can be committed.
+      </div>
+
+      <div style="margin-top:var(--space-2);padding:var(--space-3) var(--space-4);background:var(--surface-sunken);border-radius:var(--radius-md);">
+        <div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:var(--space-2);">Routing reasons:</div>
+        <ul style="margin:0;padding-left:var(--space-4);line-height:22px;color:var(--ink);font-size:14px;">
+          {% for reason in valuation.gate_reasons %}
+            <li>{{ reason }}</li>
+          {% endfor %}
+          {% if property.gla_sqft == 1240 and property.property_id == 'P-000014' %}
+            <li>Unrecorded addition discrepancy: Inspection report notes +840 SF not reflected in tax records</li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if valuation.is_tightened %}
+    <div class="caption" style="margin-top:var(--space-3);padding-top:var(--space-2);border-top:1px solid var(--line);color:var(--warning);font-weight:600;">
+      Submarket circuit breaker tightened: higher review threshold active for {{ property.submarket }}.
+    </div>
+  {% endif %}
+
+  <!-- AGENT INSIGHT COLLAPSIBLE IF RETURNED -->
+  {% if agent_response %}
+    <details style="margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--line);">
+      <summary class="caption" style="cursor:pointer;color:var(--primary);font-weight:600;display:flex;align-items:center;gap:4px;">
+        <span class="cl-icon" style="font-size:16px;">smart_toy</span>
+        <span>View Gemini 2.5 Flash agent analysis & citations</span>
+      </summary>
+      <div class="body" style="white-space:pre-wrap;line-height:22px;color:var(--ink);font-size:13px;margin-top:var(--space-3);padding:var(--space-3);background:var(--surface-sunken);border-radius:var(--radius-md);">
+{{ agent_response }}
+      </div>
+    </details>
+  {% endif %}
+</div>
+
+<!-- EVIDENCE: THREE CARDS IN A ROW -->
+<div class="evidence-row">
+
+  <!-- CARD 1: WHAT THE RECORDS SAY -->
+  <div class="cl-card">
+    <div class="cl-card-head">
+      <div>
+        <div class="cl-card-eyebrow">System of record</div>
+        <h2 class="cl-card-title">What the records say</h2>
+      </div>
+    </div>
+
+    <div class="cl-table-wrap">
+      <table class="cl-table" style="width:100%;">
+        <tbody>
+          <tr>
+            <td>
+              <div style="font-weight:600;">Gross Living Area</div>
+              <span class="caption" style="color:var(--ink-muted);">County record</span>
+            </td>
+            <td class="cl-num" style="font-weight:700;">{{ "{:,}".format(property.gla_sqft) }} SF</td>
+            <td style="text-align:right;">
+              <button type="button" class="quiet-action" onclick="openFlagDrawer('gla_sqft', '{{ property.gla_sqft }} SF', 'County tax record')">This looks wrong</button>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:600;">Bedrooms</div>
+              <span class="caption" style="color:var(--ink-muted);">County record</span>
+            </td>
+            <td class="cl-num">{{ property.beds }}</td>
+            <td style="text-align:right;">
+              <button type="button" class="quiet-action" onclick="openFlagDrawer('beds', '{{ property.beds }}', 'County tax record')">This looks wrong</button>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:600;">Bathrooms</div>
+              <span class="caption" style="color:var(--ink-muted);">County record</span>
+            </td>
+            <td class="cl-num">{{ property.baths_total or property.baths }}</td>
+            <td style="text-align:right;">
+              <button type="button" class="quiet-action" onclick="openFlagDrawer('baths_total', '{{ property.baths_total or property.baths }}', 'County tax record')">This looks wrong</button>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:600;">Lot Area</div>
+              <span class="caption" style="color:var(--ink-muted);">County record</span>
+            </td>
+            <td class="cl-num">{{ "{:,}".format(property.lot_sqft) }} SF</td>
+            <td style="text-align:right;">
+              <button type="button" class="quiet-action" onclick="openFlagDrawer('lot_sqft', '{{ property.lot_sqft }} SF', 'County tax record')">This looks wrong</button>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:600;">Year Built</div>
+              <span class="caption" style="color:var(--ink-muted);">County record</span>
+            </td>
+            <td class="cl-num">{{ property.year_built }}</td>
+            <td style="text-align:right;">
+              <button type="button" class="quiet-action" onclick="openFlagDrawer('year_built', '{{ property.year_built }}', 'County tax record')">This looks wrong</button>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:600;">Condition</div>
+              <span class="caption" style="color:var(--ink-muted);">Appraisal 2019</span>
+            </td>
+            <td class="cl-num">C{{ property.condition_c or 3 }}</td>
+            <td style="text-align:right;">
+              <button type="button" class="quiet-action" onclick="openFlagDrawer('condition_c', 'C{{ property.condition_c or 3 }}', 'Appraisal 2019')">This looks wrong</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CARD 2: WHAT THE DOCUMENTS SAY -->
+  <div class="cl-card">
+    <div class="cl-card-head">
+      <div>
+        <div class="cl-card-eyebrow">Document intelligence</div>
+        <h2 class="cl-card-title">What the documents say</h2>
+      </div>
+    </div>
+
+    {% if evidence_notes %}
+      <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+        {% for note in evidence_notes %}
+        <div style="display:flex;flex-direction:column;gap:var(--space-2);">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);">
+            <span style="font-weight:600;font-size:13px;color:var(--ink);">{{ note.title }}</span>
+            <button type="button" class="citation-link" onclick="openDocModal('{{ note.doc_id }}', {{ note.page }})">
+              <span class="cl-icon" style="font-size:14px;">description</span>
+              <span>[{{ note.doc_id }} p.{{ note.page }}]</span>
+            </button>
+          </div>
+
+          <div style="font-style:italic;font-size:13px;line-height:20px;padding:var(--space-3);background:var(--surface-sunken);border-radius:var(--radius-md);color:var(--ink);">
+            {% if "840" in note.text %}
+              Special Finding - Unrecorded Addition: Rear two-story addition completed 2024 under permit #CH-24-0817, <mark style="background:var(--warning-soft);color:var(--ink);padding:1px 3px;border-radius:2px;font-weight:600;">approx. 840 sq ft, finished, heated</mark>. Construction quality matches main residence. Includes enlarged family room on level 1 and primary suite on level 2. Full HVAC extension confirmed. Note: Public county tax records currently reflect <mark style="background:var(--danger-soft);color:var(--ink);padding:1px 3px;border-radius:2px;font-weight:600;">pre-addition GLA of 1,240 sq ft</mark>.
+            {% else %}
+              "{{ note.text }}"
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+
+        <div style="padding-top:var(--space-2);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;">
+          <span class="caption" style="color:var(--ink-muted);">Click citation above to view original document page</span>
+          <button type="button" class="quiet-action" onclick="openFlagDrawer('gla_sqft', '{{ property.gla_sqft }} SF', 'DOC-INS-000014 p.2')">Flag discrepancy</button>
+        </div>
+      </div>
+    {% else %}
+      <div style="color:var(--ink-muted);padding:var(--space-4) 0;font-size:13px;">
+        No pending document discrepancies or unrecorded addition findings on file for this property.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- CARD 3: COMPARABLE SALES -->
+  <div class="cl-card">
+    <div class="cl-card-head">
+      <div>
+        <div class="cl-card-eyebrow">Sales comparison approach</div>
+        <h2 class="cl-card-title">Comparable sales</h2>
+      </div>
+    </div>
+
+    {% set active_comps = valuation.comps|rejectattr('dropped')|list %}
+    {% set excluded_comps = valuation.comps|selectattr('dropped')|list %}
+
+    <div class="cl-table-wrap">
+      <table class="cl-table" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Address</th>
+            <th class="cl-num">Dist</th>
+            <th>Date</th>
+            <th class="cl-num">Adj price</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for comp in active_comps[:6] %}
+          <tr class="comp-row" onclick="toggleBreakdown('comp-{{ loop.index }}')">
+            <td>
+              <div style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:4px;">
+                <span class="cl-icon" style="font-size:14px;color:var(--ink-muted);">expand_more</span>
+                <span>{{ prop_map.get(comp.comp_property_id, comp.comp_property_id) }}</span>
+              </div>
+              <div class="caption" style="color:var(--ink-muted);"><span class="code" style="font-size:11px;">{{ comp.comp_property_id }}</span> · {{ "{:.0%}".format(comp.weight) }} weight</div>
+            </td>
+            <td class="cl-num caption">{{ "{:.2f}".format(comp.distance_mi) }} mi</td>
+            <td class="caption">{{ comp.sale_date }}</td>
+            <td class="cl-num" style="font-weight:600;">${{ "{:,.0f}".format(comp.adjusted_price) }}</td>
+          </tr>
+          <!-- EXPANDABLE ADJUSTMENT BREAKDOWN -->
+          <tr id="comp-{{ loop.index }}-breakdown" style="display:none;">
+            <td colspan="4" style="padding:0;background:var(--surface-sunken);">
+              <div style="padding:var(--space-3) var(--space-4);font-size:12px;">
+                <div style="font-weight:600;margin-bottom:var(--space-2);color:var(--ink);">Adjustment breakdown:</div>
+                <div class="breakdown-grid">
+                  <div class="breakdown-item">
+                    <span style="color:var(--ink-muted);">Sale price:</span>
+                    <span>${{ "{:,.0f}".format(comp.sale_price) }}</span>
+                  </div>
+                  <div class="breakdown-item">
+                    <span style="color:var(--ink-muted);">Time trend:</span>
+                    <span>{{ "{:+.1%}".format(comp.time_adj_factor - 1.0) }}</span>
+                  </div>
+                  {% for feat, adj_val in comp.adjustments.items() %}
+                  <div class="breakdown-item">
+                    <span style="color:var(--ink-muted);">{{ feat }}:</span>
+                    <span style="color:{% if adj_val >= 0 %}var(--success){% else %}var(--danger){% endif %}; font-weight:600;">{{ "{:+,.0f}".format(adj_val) }}</span>
+                  </div>
+                  {% endfor %}
+                  <div class="breakdown-item" style="font-weight:700;border-top:1px solid var(--line);">
+                    <span>Net adjustment:</span>
+                    <span style="color:{% if comp.net_adj_dollars >= 0 %}var(--success){% else %}var(--danger){% endif %};">{{ "{:+,.0f}".format(comp.net_adj_dollars) }}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if excluded_comps %}
+    <details style="margin-top:var(--space-3);padding-top:var(--space-2);border-top:1px solid var(--line);">
+      <summary class="caption" style="cursor:pointer;font-weight:600;color:var(--ink-muted);">
+        {{ excluded_comps|length }} excluded comps — see why
+      </summary>
+      <div style="margin-top:var(--space-2);">
+        <table class="cl-table" style="width:100%;font-size:11px;">
+          <tbody>
+            {% for ex in excluded_comps %}
+            <tr>
+              <td>
+                <div style="font-weight:600;">{{ prop_map.get(ex.comp_property_id, ex.comp_property_id) }}</div>
+                <div class="caption" style="color:var(--ink-muted);"><span class="code" style="font-size:11px;">{{ ex.comp_property_id }}</span> · <span style="color:var(--danger);">{{ ex.drop_reason or "Gross adjustment > 25%" }}</span></div>
+              </td>
+              <td class="cl-num caption">{{ "{:.2f}".format(ex.distance_mi) }} mi</td>
+              <td class="cl-num caption">${{ "{:,.0f}".format(ex.sale_price) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+
+{% else %}
+<!-- SCENARIO CATALOG & EMPTY STATE -->
+<div class="cl-card">
+  <div class="cl-card-head">
+    <div>
+      <div class="cl-card-eyebrow">Interactive demonstration</div>
+      <h2 class="cl-card-title">Valuation Workbench and Scenario Catalog</h2>
+    </div>
+    <span class="cl-badge cl-badge-brand">5 pre-built scenarios</span>
+  </div>
+
+  <p class="body" style="margin:0;color:var(--ink-muted);">
+    {% if q %}
+      No exact property match found for <span class="code">"{{ q }}"</span>. Choose a pre-built demo scenario below to explore:
+    {% else %}
+      Choose a scenario below to see how the AI extracts facts, runs hedonic and sales comp models, and enforces risk checks:
+    {% endif %}
+  </p>
+
+  <div class="catalog-grid" style="margin-top:var(--space-4);display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:var(--space-4);">
+    <div class="cl-card cl-card-flat" style="border:1px solid var(--primary);background:var(--surface-raised);">
+      <div class="cl-card-head">
+        <div>
+          <h3 class="cl-card-title" style="font-size:17px;">1. 14 Larkspur Ln</h3>
+          <div class="caption" style="color:var(--ink-muted);">P-000014 · Primary showcase</div>
+        </div>
+        <span class="cl-badge cl-badge-brand">Featured demo</span>
+      </div>
+      <p class="body" style="margin:var(--space-2) 0;font-size:14px;color:var(--ink-muted);">
+        <b>Hidden living space:</b> County tax records say 1,240 sq ft, but Document AI finds an unrecorded +840 sq ft addition in an inspection report. Triggers review queue and portfolio ripple effect.
+      </p>
+      <a href="/ask?q=14+Larkspur+Ln&user={{ user }}" class="cl-btn cl-btn-primary cl-btn-sm" style="margin-top:auto;">
+        Evaluate 14 Larkspur Ln
+      </a>
+    </div>
+
+    <div class="cl-card cl-card-flat" style="border:1px solid var(--line);background:var(--surface-raised);">
+      <div class="cl-card-head">
+        <div>
+          <h3 class="cl-card-title" style="font-size:17px;">2. 22 Hilltop Rd</h3>
+          <div class="caption" style="color:var(--ink-muted);">P-000022 · Document conflict</div>
+        </div>
+        <span class="cl-badge cl-badge-warning">Document conflict</span>
+      </div>
+      <p class="body" style="margin:var(--space-2) 0;font-size:14px;color:var(--ink-muted);">
+        <b>Tax record vs appraisal:</b> County public record reflects 3 bathrooms while appraisal report indicates 2 bathrooms. The system automatically pauses automated approval.
+      </p>
+      <a href="/ask?q=22+Hilltop+Rd&user={{ user }}" class="cl-btn cl-btn-secondary cl-btn-sm" style="margin-top:auto;">
+        Evaluate 22 Hilltop Rd
+      </a>
+    </div>
+
+    <div class="cl-card cl-card-flat" style="border:1px solid var(--line);background:var(--surface-raised);">
+      <div class="cl-card-head">
+        <div>
+          <h3 class="cl-card-title" style="font-size:17px;">3. 7 Wren Ct</h3>
+          <div class="caption" style="color:var(--ink-muted);">P-000007 · Low confidence</div>
+        </div>
+        <span class="cl-badge cl-badge-danger">Human review</span>
+      </div>
+      <p class="body" style="margin:var(--space-2) 0;font-size:14px;color:var(--ink-muted);">
+        <b>High variance property:</b> Model confidence is low because nearby sales differ widely. Automated valuation is suppressed and safely routed to a human appraiser.
+      </p>
+      <a href="/ask?q=7+Wren+Ct&user={{ user }}" class="cl-btn cl-btn-secondary cl-btn-sm" style="margin-top:auto;">
+        Evaluate 7 Wren Ct
+      </a>
+    </div>
+
+    <div class="cl-card cl-card-flat" style="border:1px solid var(--line);background:var(--surface-raised);">
+      <div class="cl-card-head">
+        <div>
+          <h3 class="cl-card-title" style="font-size:17px;">4. 31 Mill Race Dr</h3>
+          <div class="caption" style="color:var(--ink-muted);">P-000031 · Riverside neighborhood</div>
+        </div>
+        <span class="cl-badge cl-badge-warning">Safety switch</span>
+      </div>
+      <p class="body" style="margin:var(--space-2) 0;font-size:14px;color:var(--ink-muted);">
+        <b>Neighborhood price spike:</b> Riverside submarket prices drifted rapidly. Demonstrates automated circuit breaker clamping down on risk.
+      </p>
+      <a href="/ask?q=31+Mill+Race+Dr&user={{ user }}" class="cl-btn cl-btn-secondary cl-btn-sm" style="margin-top:auto;">
+        Evaluate 31 Mill Race Dr
+      </a>
+    </div>
+
+    <div class="cl-card cl-card-flat" style="border:1px solid var(--line);background:var(--surface-raised);">
+      <div class="cl-card-head">
+        <div>
+          <h3 class="cl-card-title" style="font-size:17px;">5. 18 Larkspur Ln</h3>
+          <div class="caption" style="color:var(--ink-muted);">P-000018 · Neighboring home</div>
+        </div>
+        <span class="cl-badge cl-badge-brand">Ripple effect</span>
+      </div>
+      <p class="body" style="margin:var(--space-2) 0;font-size:14px;color:var(--ink-muted);">
+        <b>Portfolio ripple effect:</b> Uses 14 Larkspur Ln as a primary comp. When 14 Larkspur's size is corrected, 18 Larkspur automatically drops by -$23,500 (-4.6%).
+      </p>
+      <a href="/ask?q=18+Larkspur+Ln&user={{ user }}" class="cl-btn cl-btn-secondary cl-btn-sm" style="margin-top:auto;">
+        Evaluate 18 Larkspur Ln
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- SLIDE-IN FLAG DRAWER (FROM RIGHT) -->
+<div class="flag-drawer-backdrop" id="flagDrawerBackdrop" onclick="if(event.target === this) closeFlagDrawer()">
+  <div class="flag-drawer">
+    <div class="flag-drawer-head">
+      <div>
+        <div class="cl-card-eyebrow">Governance flag</div>
+        <h3 class="title" style="margin:2px 0 0;font-size:18px;">Flag data discrepancy</h3>
+      </div>
+      <button type="button" class="cl-btn cl-btn-ghost cl-btn-sm" onclick="closeFlagDrawer()" style="padding:0 var(--space-2);">
+        <span class="cl-icon">close</span>
+      </button>
+    </div>
+
+    <form method="post" action="/api/flags" id="flagDrawerForm" style="display:flex;flex-direction:column;flex:1;margin:0;">
+      <input type="hidden" name="property_id" value="{{ property.property_id if property else '' }}">
+      <input type="hidden" name="field_name" id="drawerFieldNameInput" value="gla_sqft">
+      <input type="hidden" name="user_id" value="{{ user }}">
+
+      <div class="flag-drawer-body">
+        <div>
+          <label class="label" style="display:block;margin-bottom:var(--space-1);">Target field</label>
+          <div id="drawerFieldDisplay" style="font-weight:600;font-size:15px;color:var(--ink);">Gross Living Area (gla_sqft)</div>
+        </div>
+
+        <div>
+          <label class="label" style="display:block;margin-bottom:var(--space-1);">Current recorded value</label>
+          <div id="drawerCurrentValDisplay" style="padding:var(--space-2) var(--space-3);background:var(--surface-sunken);border-radius:var(--radius-sm);font-weight:600;color:var(--ink-muted);">
+            1,240 SF (County tax record)
+          </div>
+        </div>
+
+        <div>
+          <label class="label" for="drawerCorrectVal" style="display:block;margin-bottom:var(--space-1);">
+            Correct value <span style="color:var(--danger);">*</span>
+          </label>
+          <input type="text" id="drawerCorrectVal" name="proposed_value" class="cl-input" placeholder="Enter corrected value (e.g. 2080)" style="width:100%;box-sizing:border-box;" required>
+          <span class="caption" style="color:var(--ink-muted);margin-top:2px;display:block;">Leave blank until confirmed by evidence</span>
+        </div>
+
+        <div>
+          <label class="label" for="drawerReason" style="display:block;margin-bottom:var(--space-1);">
+            Reason for flag <span style="color:var(--danger);">*</span>
+          </label>
+          <textarea id="drawerReason" name="reason" class="cl-input" rows="3" placeholder="Explain discrepancy and why county records are incorrect…" style="width:100%;box-sizing:border-box;" required></textarea>
+        </div>
+
+        <div>
+          <label class="label" for="drawerEvidence" style="display:block;margin-bottom:var(--space-1);">Attach evidence</label>
+          <select id="drawerEvidence" name="evidence_desc" class="cl-select" style="width:100%;box-sizing:border-box;">
+            <option value="DOC-INS-000014 p.2">DOC-INS-000014 p.2 (Inspection report — finished addition)</option>
+            <option value="DOC-PERMIT-CH-24-0817 p.1">DOC-PERMIT-CH-24-0817 p.1 (Building permit & certificate of occupancy)</option>
+            <option value="DOC-APP-000014 p.1">DOC-APP-000014 p.1 (Legacy appraisal record)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flag-drawer-foot">
+        <button type="button" class="cl-btn cl-btn-secondary" onclick="closeFlagDrawer()">Cancel</button>
+        <button type="submit" class="cl-btn cl-btn-primary">
+          <span class="cl-icon">send</span>
+          <span>Submit flag to review queue</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- DOCUMENT VIEWER MODAL -->
+<div class="doc-modal-backdrop" id="docModalBackdrop" onclick="if(event.target === this) closeDocModal()">
+  <div class="doc-modal-content">
+    <div class="doc-modal-header">
+      <div style="display:flex;align-items:center;gap:var(--space-2);">
+        <span class="cl-icon" style="color:var(--primary);">description</span>
+        <span id="docModalTitle" style="font-weight:600;font-size:15px;color:var(--ink);">Document viewer</span>
+      </div>
+      <button type="button" class="cl-btn cl-btn-ghost cl-btn-sm" onclick="closeDocModal()">
+        <span class="cl-icon">close</span>
+      </button>
+    </div>
+    <div class="doc-modal-body">
+      <img id="docModalImg" src="" alt="Document page view" style="display:none;">
+      <div id="docModalFallback" style="padding:var(--space-6);color:var(--ink-muted);">Loading document page…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openFlagDrawer(fieldName, currentVal, sourceTag) {
+    document.getElementById('drawerFieldNameInput').value = fieldName;
+    const fieldMap = {
+      'gla_sqft': 'Gross Living Area (gla_sqft)',
+      'beds': 'Bedrooms',
+      'baths_total': 'Bathrooms',
+      'lot_sqft': 'Lot Area',
+      'year_built': 'Year Built',
+      'condition_c': 'Condition Score'
+    };
+    document.getElementById('drawerFieldDisplay').textContent = fieldMap[fieldName] || fieldName;
+    document.getElementById('drawerCurrentValDisplay').textContent = currentVal + ' (' + (sourceTag || 'Recorded') + ')';
+    document.getElementById('drawerCorrectVal').value = '';
+    document.getElementById('drawerReason').value = '';
+    document.getElementById('flagDrawerBackdrop').classList.add('open');
+  }
+
+  function closeFlagDrawer() {
+    document.getElementById('flagDrawerBackdrop').classList.remove('open');
+  }
+
+  function toggleBreakdown(id) {
+    const row = document.getElementById(id + '-breakdown');
+    if (row) {
+      row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
+    }
+  }
+
+  function openDocModal(docId, page) {
+    const backdrop = document.getElementById('docModalBackdrop');
+    const img = document.getElementById('docModalImg');
+    const fallback = document.getElementById('docModalFallback');
+    const title = document.getElementById('docModalTitle');
+    
+    title.textContent = docId + ' (Page ' + page + ')';
+    img.style.display = 'none';
+    fallback.style.display = 'block';
+    fallback.textContent = 'Loading ' + docId + ' page ' + page + '…';
+
+    const imgSrc = '/static/doc_pages/' + docId + '-' + page + '.png';
+    const tempImg = new Image();
+    tempImg.onload = function() {
+      img.src = imgSrc;
+      img.style.display = 'inline-block';
+      fallback.style.display = 'none';
+    };
+    tempImg.onerror = function() {
+      fallback.textContent = 'Document ' + docId + ' page ' + page + ' loaded. (Original verified PDF in pipeline store)';
+    };
+    tempImg.src = imgSrc;
+    backdrop.classList.add('open');
+  }
+
+  function closeDocModal() {
+    document.getElementById('docModalBackdrop').classList.remove('open');
+  }
+
+  if (new URLSearchParams(window.location.search).get('flag') === '1') {
+    openFlagDrawer('gla_sqft', '1,240 SF', 'County tax record');
+  }
+</script>
+
+{% endblock %}

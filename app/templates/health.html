@@ -1,0 +1,61 @@
+{% extends "shell.html" %}
+{% block title %}Model health · Valuation assistant{% endblock %}
+
+{% block content %}
+<main class="page">
+  <div class="page-head">
+    <h1 class="display">Model health</h1>
+    <p class="body-lg">We track how close our values land to the price homes actually sell for, by neighborhood. If accuracy slips, the safety checks tighten automatically, before a bad value reaches a loan.</p>
+  </div>
+
+  <div class="cl-banner">
+    <span class="cl-icon">info</span>
+    <div class="cl-banner-body"><div class="cl-banner-text">Riverside's drift is a seeded scenario for this demo. In production a scheduled job recomputes these numbers from new closed sales.</div></div>
+  </div>
+
+  <div class="health-cards">
+    {% for name, b in breaker_state.items() | sort(attribute='1.tripped', reverse=True) %}
+    <article class="cl-card health-card {% if b.tripped %}tripped{% endif %}">
+      <div class="review-top">
+        <div>
+          <div class="cl-card-eyebrow">Neighborhood</div>
+          <h2 class="cl-card-title">{{ name }}</h2>
+        </div>
+        {% if b.tripped %}
+        <span class="cl-badge cl-badge-warning"><span class="cl-icon">shield</span><span>Stricter checks on</span></span>
+        {% else %}
+        <span class="cl-badge cl-badge-success"><span class="cl-icon">check_circle</span><span>Normal</span></span>
+        {% endif %}
+      </div>
+
+      <div>
+        <div class="metric-row">
+          <span class="label muted">Typical miss vs. sale price</span>
+          <span class="metric-num {% if b.tripped %}bad{% endif %}">{{ "%.1f" | format(b.unanchored_mdape * 100) }}%</span>
+        </div>
+        <div class="bar" role="img" aria-label="{{ '%.1f' | format(b.unanchored_mdape * 100) }}% against a limit of {{ '%.0f' | format(limit * 100) }}%">
+          <div class="bar-fill {% if b.tripped %}bad{% endif %}" style="width: {{ [b.unanchored_mdape / 0.15 * 100, 100] | min }}%"></div>
+          <div class="bar-limit" style="left: {{ limit / 0.15 * 100 }}%"></div>
+        </div>
+        <div class="caption muted">Limit {{ "%.0f" | format(limit * 100) }}% · based on {{ b.volume_90d }} sales in the last 90 days</div>
+      </div>
+
+      {% if b.tripped %}
+      <div class="tripped-detail">
+        <p class="body">Values here have been missing by more than the limit, mostly on the high side. Until it recovers, every valuation in {{ name }} has to pass tighter checks:</p>
+        <table class="mini">
+          <thead><tr><th>Check</th><th class="num">Normal</th><th class="num">Now</th></tr></thead>
+          <tbody>
+            <tr><td>Comparable sales needed</td><td class="num">{{ g2.normal.min_comps }}</td><td class="num">{{ g2.tightened.min_comps }}</td></tr>
+            <tr><td>Widest allowed range</td><td class="num">{{ "%.0f" | format(g2.normal.max_range_width * 100) }}%</td><td class="num">{{ "%.0f" | format(g2.tightened.max_range_width * 100) }}%</td></tr>
+            <tr><td>Allowed disagreement with price model</td><td class="num">{{ "%.0f" | format(g2.normal.max_divergence * 100) }}%</td><td class="num">{{ "%.0f" | format(g2.tightened.max_divergence * 100) }}%</td></tr>
+          </tbody>
+        </table>
+        <a class="cl-btn cl-btn-secondary cl-btn-sm" href="/?q={{ 'What is 31 Mill Race Dr worth?' | urlencode }}"><span class="cl-icon">forum</span><span>Try 31 Mill Race Dr</span></a>
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}

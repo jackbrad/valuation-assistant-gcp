@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Appraisal AI — Property Valuation Workbench{% endblock %}
+{% block context_name %}Valuation Platform{% endblock %}
+
+{% block content %}
+<div style="max-width:960px;margin:var(--space-6) auto var(--space-8);display:flex;flex-direction:column;gap:var(--space-6);">
+
+  <!-- HERO SECTION -->
+  <div style="text-align:center;max-width:760px;margin:0 auto;">
+    <div class="cl-badge cl-badge-brand" style="margin-bottom:var(--space-3);">
+      <span class="cl-icon">verified</span>
+      <span>Appraisal-Grade Property Valuation</span>
+    </div>
+    <h1 class="display" style="font-size:38px;font-weight:700;line-height:1.2;margin:0 0 var(--space-3);color:var(--ink);">
+      Defensible property valuations with cited document intelligence
+    </h1>
+    <p class="body-lg" style="color:var(--ink-muted);margin:0;line-height:1.6;">
+      Enter any residential address or select a showcase scenario below to generate an appraisal-grade valuation with verified document citations. Review unrecorded living area additions, audit comparable sales, and test dual-reviewer consensus before committing values.
+    </p>
+  </div>
+
+  <!-- SEARCH / PROMPT BOX -->
+  <div class="cl-prompt" style="box-shadow:var(--shadow-1);background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-3);">
+    <form method="get" action="/ask" style="display:flex;gap:var(--space-3);align-items:center;margin:0;width:100%;">
+      <input type="hidden" name="user" value="{{ user }}">
+      <div style="flex:1;position:relative;">
+        <input type="text" name="q" class="cl-input" placeholder="Enter address or property ID (e.g. 14 Larkspur Ln, 22 Hilltop Rd, P-000014)…" style="width:100%;height:48px;font-size:16px;padding-left:var(--space-4);" required autofocus>
+      </div>
+      <button type="submit" class="cl-btn cl-btn-primary" style="height:48px;padding:0 var(--space-6);font-size:15px;">
+        <span class="cl-icon">search</span>
+        <span>Evaluate property</span>
+      </button>
+    </form>
+  </div>
+
+  <!-- 3 CAPABILITY PILLARS -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:var(--space-4);">
+    <div class="cl-card cl-card-flat" style="padding:var(--space-4);">
+      <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);">
+        <span class="cl-icon" style="color:var(--primary);font-size:20px;">description</span>
+        <h3 class="title" style="margin:0;font-size:16px;">Document intelligence</h3>
+      </div>
+      <p class="body" style="font-size:13px;color:var(--ink-muted);margin:0;line-height:1.5;">
+        Extracts unrecorded additions and condition notes from inspection reports and building permits using Document AI Layout Parser and Gemini.
+      </p>
+    </div>
+
+    <div class="cl-card cl-card-flat" style="padding:var(--space-4);">
+      <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);">
+        <span class="cl-icon" style="color:var(--primary);font-size:20px;">calculate</span>
+        <h3 class="title" style="margin:0;font-size:16px;">Sales comp approach</h3>
+      </div>
+      <p class="body" style="font-size:13px;color:var(--ink-muted);margin:0;line-height:1.5;">
+        Selects recent closed sales within 12 months, applies time-trended feature adjustments, and enforces automated risk gates (G1 and G2).
+      </p>
+    </div>
+
+    <div class="cl-card cl-card-flat" style="padding:var(--space-4);">
+      <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);">
+        <span class="cl-icon" style="color:var(--primary);font-size:20px;">how_to_reg</span>
+        <h3 class="title" style="margin:0;font-size:16px;">Consensus governance</h3>
+      </div>
+      <p class="body" style="font-size:13px;color:var(--ink-muted);margin:0;line-height:1.5;">
+        Requires two independent approvers with zero transaction stake before updating facts and triggering portfolio cascade revaluations.
+      </p>
+    </div>
+  </div>
+
+  <!-- DEMO SHOWCASE SCENARIOS -->
+  <div class="cl-card" style="box-shadow:var(--shadow-1);">
+    <div class="cl-card-head" style="border-bottom:1px solid var(--line);padding-bottom:var(--space-3);">
+      <div>
+        <div class="cl-card-eyebrow">Interactive demonstration</div>
+        <h2 class="cl-card-title" style="font-size:18px;">Showcase case files</h2>
+      </div>
+      <span class="cl-badge cl-badge-neutral">5 pre-built scenarios</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:var(--space-3);padding-top:var(--space-3);">
+      
+      <!-- SCENARIO 1: 14 LARKSPUR (PRIMARY) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-4);border:1px solid var(--primary);border-radius:var(--radius-md);background:var(--surface-raised);gap:var(--space-4);flex-wrap:wrap;">
+        <div style="max-width:620px;">
+          <div style="display:flex;align-items:center;gap:var(--space-2);">
+            <span class="cl-badge cl-badge-brand">Primary demo</span>
+            <h3 class="title" style="margin:0;font-size:17px;">14 Larkspur Ln</h3>
+            <span class="caption" style="color:var(--ink-muted);">P-000014 · Larkspur</span>
+          </div>
+          <p class="body" style="margin:var(--space-2) 0 0;font-size:13px;color:var(--ink-muted);line-height:1.5;">
+            <b>Unrecorded living space:</b> County tax records show 1,240 SF Gross Living Area; inspection report surfaces a permitted +840 SF addition (2,080 SF total). Triggers G2 human appraiser hold and portfolio ripple revaluation.
+          </p>
+        </div>
+        <a href="/ask?q=14+Larkspur+Ln&user={{ user }}" class="cl-btn cl-btn-primary">
+          <span>Evaluate 14 Larkspur Ln</span>
+          <span class="cl-icon">arrow_forward</span>
+        </a>
+      </div>
+
+      <!-- SCENARIO 2: 22 HILLTOP -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-md);gap:var(--space-4);flex-wrap:wrap;">
+        <div style="max-width:620px;">
+          <div style="display:flex;align-items:center;gap:var(--space-2);">
+            <span class="cl-badge cl-badge-warning">Document conflict</span>
+            <h3 class="title" style="margin:0;font-size:16px;">22 Hilltop Rd</h3>
+            <span class="caption" style="color:var(--ink-muted);">P-000022 · Hilltop</span>
+          </div>
+          <p class="body" style="margin:var(--space-2) 0 0;font-size:13px;color:var(--ink-muted);line-height:1.5;">
+            <b>Bathroom count discrepancy:</b> Public records show 1 bath while appraisal report confirms 2 baths. Triggers G1 cross-source hold requiring reviewer confirmation.
+          </p>
+        </div>
+        <a href="/ask?q=22+Hilltop+Rd&user={{ user }}" class="cl-btn cl-btn-secondary">
+          <span>Evaluate 22 Hilltop Rd</span>
+          <span class="cl-icon">arrow_forward</span>
+        </a>
+      </div>
+
+      <!-- SCENARIO 3: 18 LARKSPUR -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-md);gap:var(--space-4);flex-wrap:wrap;">
+        <div style="max-width:620px;">
+          <div style="display:flex;align-items:center;gap:var(--space-2);">
+            <span class="cl-badge cl-badge-success">Conforming & ripple</span>
+            <h3 class="title" style="margin:0;font-size:16px;">18 Larkspur Ln</h3>
+            <span class="caption" style="color:var(--ink-muted);">P-000018 · Larkspur</span>
+          </div>
+          <p class="body" style="margin:var(--space-2) 0 0;font-size:13px;color:var(--ink-muted);line-height:1.5;">
+            <b>Conforming instant approval:</b> 12 eligible comps produce a high-confidence valuation. Revalues downward (-$23,500 / -4.6%) when neighboring comp 14 Larkspur is corrected.
+          </p>
+        </div>
+        <a href="/ask?q=18+Larkspur+Ln&user={{ user }}" class="cl-btn cl-btn-secondary">
+          <span>Evaluate 18 Larkspur Ln</span>
+          <span class="cl-icon">arrow_forward</span>
+        </a>
+      </div>
+
+      <!-- SCENARIO 4: 7 WREN CT -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-md);gap:var(--space-4);flex-wrap:wrap;">
+        <div style="max-width:620px;">
+          <div style="display:flex;align-items:center;gap:var(--space-2);">
+            <span class="cl-badge cl-badge-danger">High variance</span>
+            <h3 class="title" style="margin:0;font-size:16px;">7 Wren Ct</h3>
+            <span class="caption" style="color:var(--ink-muted);">P-000007 · Riverside</span>
+          </div>
+          <p class="body" style="margin:var(--space-2) 0 0;font-size:13px;color:var(--ink-muted);line-height:1.5;">
+            <b>Out-of-distribution property:</b> Comp sales diverge widely. Point estimate is suppressed and routed to a human appraiser under governance rule G2.
+          </p>
+        </div>
+        <a href="/ask?q=7+Wren+Ct&user={{ user }}" class="cl-btn cl-btn-secondary">
+          <span>Evaluate 7 Wren Ct</span>
+          <span class="cl-icon">arrow_forward</span>
+        </a>
+      </div>
+
+      <!-- SCENARIO 5: 31 MILL RACE DR -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-md);gap:var(--space-4);flex-wrap:wrap;">
+        <div style="max-width:620px;">
+          <div style="display:flex;align-items:center;gap:var(--space-2);">
+            <span class="cl-badge cl-badge-warning">Circuit breaker</span>
+            <h3 class="title" style="margin:0;font-size:16px;">31 Mill Race Dr</h3>
+            <span class="caption" style="color:var(--ink-muted);">P-000031 · Riverside</span>
+          </div>
+          <p class="body" style="margin:var(--space-2) 0 0;font-size:13px;color:var(--ink-muted);line-height:1.5;">
+            <b>Submarket price volatility:</b> Rapid price drift in Riverside triggers the submarket circuit breaker, automatically tightening tolerance thresholds before write-downs occur.
+          </p>
+        </div>
+        <a href="/ask?q=31+Mill+Race+Dr&user={{ user }}" class="cl-btn cl-btn-secondary">
+          <span>Evaluate 31 Mill Race Dr</span>
+          <span class="cl-icon">arrow_forward</span>
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

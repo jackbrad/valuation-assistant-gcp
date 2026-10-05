@@ -1,0 +1,288 @@
+<title>Property Valuation Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one wide left-to-right system diagram (data path on top, feedback loop beneath), talk track below. */
+:root{
+  --bg:#f4f6f5; --surface:#ffffff; --ink:#1c2a2e; --muted:#566a6f; --line:#b4c2c4;
+  --accent:#1d6c75; --gate:#b07415; --gate-bg:#fbf0dc; --gate-ink:#7a4f0c;
+  --loop:#ad3d4a; --loop-bg:#fbe9ec; --loop-band:#f8eef0;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121819; --surface:#1a2427; --ink:#e2eaeb; --muted:#94a6aa; --line:#3a4b4f;
+  --accent:#62b6bf; --gate:#dea548; --gate-bg:#2b2416; --gate-ink:#f0c57c;
+  --loop:#e57e8a; --loop-bg:#2b1b1f; --loop-band:#1d1a1c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121819; --surface:#1a2427; --ink:#e2eaeb; --muted:#94a6aa; --line:#3a4b4f;
+  --accent:#62b6bf; --gate:#dea548; --gate-bg:#2b2416; --gate-ink:#f0c57c;
+  --loop:#e57e8a; --loop-bg:#2b1b1f; --loop-band:#1d1a1c; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:1720px;margin:0 auto;padding-inline:20px;padding-block:28px 48px;display:grid;gap:22px}
+header{display:grid;gap:6px}
+h1{font-size:clamp(1.5rem,2.6vw,2.1rem);font-weight:600;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:0;max-width:72ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.sw{width:26px;height:0;border-top:2px solid var(--ink)}
+.sw.gate{border-color:var(--gate);border-width:6px;border-radius:3px;width:18px}
+.sw.loop{border-color:var(--loop)}
+.sw.dash{border-top:2px dashed var(--muted)}
+figure{margin:0;display:grid;gap:10px}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+svg{display:block;width:100%;min-width:1180px;height:auto}
+figcaption{color:var(--muted);font-size:13px;max-width:90ch}
+.talk{display:grid;gap:10px;max-width:78ch}
+.talk h2{font-size:1.05rem;margin:0;font-weight:600}
+.talk ol{margin:0;padding-left:1.3em;display:grid;gap:6px}
+.talk b{font-weight:600}
+code{font:500 .9em var(--mono);color:var(--accent)}
+/* SVG classes */
+.t{font:600 14px var(--sans);fill:var(--ink)}
+.s{font:400 12px var(--sans);fill:var(--muted)}
+.m{font:500 12px var(--mono);fill:var(--accent)}
+.h{font:600 12px var(--sans);letter-spacing:.08em;fill:var(--muted)}
+.hl{font:600 12px var(--sans);letter-spacing:.08em;fill:var(--loop)}
+.tiny{font:500 11px var(--sans);fill:var(--muted)}
+.tiny-loop{font:500 11px var(--sans);fill:var(--loop)}
+.gt{font:700 13px var(--sans);letter-spacing:.06em;fill:var(--gate-ink)}
+.cont{fill:none;stroke:var(--line);stroke-width:1.2}
+.dash{stroke-dasharray:5 4}
+.box{fill:var(--surface);stroke:var(--line)}
+.box.key{stroke:var(--accent);stroke-width:1.4}
+.note{fill:none;stroke:var(--muted);stroke-dasharray:5 4}
+.loopbox{fill:var(--loop-bg);stroke:var(--loop)}
+.gate{fill:var(--gate-bg);stroke:var(--gate);stroke-width:1.6}
+.band{fill:var(--loop-band)}
+.gov{fill:var(--bg);stroke:var(--line)}
+.ln{fill:none;stroke:var(--ink);stroke-width:1.5}
+.ln-loop{fill:none;stroke:var(--loop);stroke-width:1.6}
+.ln-gate{fill:none;stroke:var(--gate);stroke-width:1.6}
+.halo{fill:none;stroke:var(--surface);stroke-width:9}
+.halo-band{fill:none;stroke:var(--loop-band);stroke-width:9}
+.ah-ink{fill:var(--ink)} .ah-loop{fill:var(--loop)} .ah-gate{fill:var(--gate)}
+.tb{font:600 13px var(--sans);fill:var(--ink)} .ts{font:400 13px var(--sans);fill:var(--muted)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Property Valuation Architecture</h1>
+    <p class="sub">Appraisal-faithful RAG on Google Cloud for a large residential real-estate marketplace with a mortgage arm. Siloed PDFs become cited facts in BigQuery, BQML builds the comps the way an appraiser does, three gates control risk, and reviewer feedback improves the data and the models every cycle.</p>
+    <div class="legend">
+      <span><i class="sw"></i>Data and request path</span>
+      <span><i class="sw gate"></i>Risk gates</span>
+      <span><i class="sw loop"></i>Human feedback loop</span>
+      <span><i class="sw dash"></i>Notes and phase 2</span>
+    </div>
+  </header>
+
+  <figure>
+    <div class="scroll">
+<svg viewBox="0 0 1660 940" role="img" aria-label="Siloed property documents are parsed into BigQuery, gated for quality, modeled with BQML, and served by a Gemini valuation agent to human reviewers, whose corrections flow back through a review queue into the data and models, with a circuit breaker watching real sales.">
+  <defs>
+    <marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="a-loop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-loop" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="a-gate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-gate" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <!-- Feedback band background -->
+  <rect class="band" x="260" y="540" width="1384" height="176" rx="14"/>
+  <text class="hl" x="276" y="563">HUMAN-IN-THE-LOOP FEEDBACK</text>
+
+  <!-- A: Sources -->
+  <rect class="cont dash" x="16" y="70" width="204" height="430" rx="14"/>
+  <text class="h" x="30" y="94">SILOED SOURCES</text>
+  <rect class="box" x="30" y="106" width="176" height="44" rx="8"/><text class="t" x="42" y="125">Legacy appraisals</text><text class="s" x="42" y="141">PDF, many scanned</text>
+  <rect class="box" x="30" y="160" width="176" height="44" rx="8"/><text class="t" x="42" y="179">Inspection reports</text><text class="s" x="42" y="195">condition findings</text>
+  <rect class="box" x="30" y="214" width="176" height="44" rx="8"/><text class="t" x="42" y="233">Seller disclosures</text><text class="s" x="42" y="249">checkbox forms</text>
+  <rect class="box" x="30" y="268" width="176" height="44" rx="8"/><text class="t" x="42" y="287">HOA + title docs</text><text class="s" x="42" y="303">long-form PDF</text>
+  <rect class="box" x="30" y="322" width="176" height="44" rx="8"/><text class="t" x="42" y="341">New appraisals</text><text class="s" x="42" y="357">UAD 3.6 XML + PDF</text>
+  <rect class="box" x="30" y="376" width="176" height="44" rx="8"/><text class="t" x="42" y="395">Public records, MLS</text><text class="s" x="42" y="411">structured feeds</text>
+  <rect class="box key" x="30" y="430" width="176" height="44" rx="8"/><text class="t" x="42" y="449">Closed sales</text><text class="s" x="42" y="465">ground-truth labels</text>
+
+  <!-- A -> B -->
+  <path class="ln" d="M220 140 H272" marker-end="url(#a-ink)"/>
+  <text class="tiny" x="246" y="132" text-anchor="middle">land</text>
+
+  <!-- B: Ingest & parse -->
+  <rect class="cont" x="260" y="70" width="240" height="430" rx="14"/>
+  <text class="h" x="274" y="94">INGEST + PARSE</text>
+  <rect class="box" x="274" y="108" width="212" height="62" rx="8"/>
+  <text class="t" x="286" y="128">Cloud Storage</text><text class="s" x="286" y="145">landing buckets per source</text><text class="m" x="286" y="161">+ BigQuery object tables</text>
+  <rect class="box" x="274" y="190" width="212" height="62" rx="8"/>
+  <text class="t" x="286" y="210">Doc AI Layout Parser</text><text class="m" x="286" y="227">ML.PROCESS_DOCUMENT</text><text class="s" x="286" y="243">tables, sections, chunks</text>
+  <rect class="box" x="274" y="272" width="212" height="62" rx="8"/>
+  <text class="t" x="286" y="292">Gemini multimodal</text><text class="m" x="286" y="309">AI.GENERATE + schema</text><text class="s" x="286" y="325">scans, checkboxes, page spans</text>
+  <rect class="box" x="274" y="354" width="212" height="92" rx="8"/>
+  <text class="t" x="286" y="374">Clean + resolve</text><text class="s" x="286" y="392">Dataform SQL: normalize units</text><text class="s" x="286" y="408">resolve to one property ID</text><text class="s" x="286" y="424">map legacy fields to UAD 3.6</text>
+  <text class="s" x="274" y="480">new file → event → parse</text>
+  <path class="ln" d="M380 170 V188" marker-end="url(#a-ink)"/>
+  <path class="ln" d="M380 252 V270" marker-end="url(#a-ink)"/>
+  <text class="tiny" x="388" y="265">hard cases</text>
+  <path class="ln" d="M380 334 V352" marker-end="url(#a-ink)"/>
+
+  <!-- G1 -->
+  <path class="ln" d="M486 400 H518" marker-end="url(#a-ink)"/>
+  <rect class="gate" x="520" y="220" width="48" height="220" rx="24"/>
+  <text class="gt" transform="translate(549 330) rotate(-90)" text-anchor="middle">G1 · DATA GATE</text>
+  <path class="ln" d="M568 260 H598" marker-end="url(#a-ink)"/>
+
+  <!-- D: BigQuery -->
+  <rect class="cont" x="600" y="70" width="300" height="430" rx="14"/>
+  <text class="h" x="614" y="94">BIGQUERY · SYSTEM OF RECORD</text>
+  <rect class="box key" x="616" y="108" width="268" height="56" rx="8"/><text class="t" x="628" y="128">Property golden record</text><text class="s" x="628" y="145">cited facts, bitemporal history</text>
+  <rect class="box" x="616" y="174" width="268" height="56" rx="8"/><text class="t" x="628" y="194">Chunks + embeddings</text><text class="m" x="628" y="211">VECTOR_SEARCH (vector DB)</text>
+  <rect class="box" x="616" y="240" width="268" height="56" rx="8"/><text class="t" x="628" y="260">Closed sales + market series</text><text class="m" x="628" y="277">ST_DWITHIN comp radius</text>
+  <rect class="loopbox" x="616" y="306" width="268" height="56" rx="8"/><text class="t" x="628" y="326">Corrections log</text><text class="s" x="628" y="343">append-only, full lineage</text>
+  <rect class="loopbox" x="616" y="372" width="268" height="56" rx="8"/><text class="t" x="628" y="392">Comp feedback</text><text class="s" x="628" y="409">reviewer accept / reject</text>
+  <text class="s" x="616" y="458">storage · SQL · ML · vectors · GIS</text>
+  <text class="s" x="616" y="476">in one serverless platform</text>
+
+  <!-- D <-> E -->
+  <path class="ln" d="M900 200 H938" marker-end="url(#a-ink)"/>
+  <text class="tiny" x="920" y="192" text-anchor="middle">train</text>
+  <path class="ln" d="M940 340 H902" marker-end="url(#a-ink)"/>
+  <text class="tiny" x="920" y="332" text-anchor="middle">score</text>
+
+  <!-- E: BQML -->
+  <rect class="cont" x="940" y="70" width="250" height="430" rx="14"/>
+  <text class="h" x="954" y="94">BQML MODELS</text>
+  <rect class="box" x="956" y="108" width="218" height="56" rx="8"/><text class="t" x="968" y="128">Market index · monthly</text><text class="m" x="968" y="145">ARIMA_PLUS</text>
+  <rect class="box" x="956" y="174" width="218" height="56" rx="8"/><text class="t" x="968" y="194">Comp ranker · weekly</text><text class="m" x="968" y="211">BOOSTED_TREE_CLASSIFIER</text>
+  <rect class="box" x="956" y="240" width="218" height="56" rx="8"/><text class="t" x="968" y="260">Adjustments · weekly</text><text class="m" x="968" y="277">LINEAR_REG = the grid</text>
+  <rect class="box key" x="956" y="306" width="218" height="56" rx="8"/><text class="t" x="968" y="326">Valuation model (AVM)</text><text class="m" x="968" y="343">BOOSTED_TREE_REGRESSOR</text>
+  <rect class="box" x="956" y="372" width="218" height="56" rx="8"/><text class="t" x="968" y="392">Champion / challenger</text><text class="s" x="968" y="409">→ Vertex AI Model Registry</text>
+  <text class="m" x="956" y="458">ML.EXPLAIN_PREDICT</text>
+  <text class="s" x="956" y="476">drivers behind every value</text>
+
+  <!-- D -> F over the top -->
+  <path class="ln" d="M750 70 V48 H1340 V68" marker-end="url(#a-ink)"/>
+  <text class="tiny" x="1045" y="40" text-anchor="middle">facts + chunks via SQL and VECTOR_SEARCH</text>
+  <!-- E -> F -->
+  <path class="ln" d="M1190 270 H1228" marker-end="url(#a-ink)"/>
+  <text class="tiny" x="1209" y="262" text-anchor="middle">value</text>
+
+  <!-- F: Agent -->
+  <rect class="cont" x="1230" y="70" width="220" height="430" rx="14"/>
+  <text class="h" x="1244" y="94">VALUATION AGENT</text>
+  <rect class="box key" x="1246" y="108" width="188" height="56" rx="8"/><text class="t" x="1258" y="128">Gemini agent (ADK)</text><text class="s" x="1258" y="145">Cloud Run or Agent Engine</text>
+  <path class="ln" d="M1256 164 V316"/>
+  <path class="ln" d="M1256 196 H1270 M1256 236 H1270 M1256 276 H1270 M1256 316 H1270"/>
+  <rect class="box" x="1270" y="180" width="164" height="32" rx="6"/><text class="m" x="1280" y="201">facts · SQL</text>
+  <rect class="box" x="1270" y="220" width="164" height="32" rx="6"/><text class="m" x="1280" y="241">comps + adjust</text>
+  <rect class="box" x="1270" y="260" width="164" height="32" rx="6"/><text class="m" x="1280" y="281">vector search</text>
+  <rect class="box" x="1270" y="300" width="164" height="32" rx="6"/><text class="m" x="1280" y="321">reconcile (math)</text>
+  <rect class="gate" x="1246" y="350" width="188" height="104" rx="8"/>
+  <text class="gt" x="1258" y="372">G2 · VALUE GATE</text>
+  <text class="s" x="1258" y="390">always a range</text>
+  <text class="s" x="1258" y="406">few comps, divergence or</text>
+  <text class="s" x="1258" y="422">unusual property →</text>
+  <text class="s" x="1258" y="438">routed to appraiser</text>
+  <text class="s" x="1246" y="480">LLM explains · math decides</text>
+
+  <!-- F -> Users -->
+  <path class="ln" d="M1450 170 H1478" marker-end="url(#a-ink)"/>
+
+  <!-- G: People -->
+  <rect class="cont" x="1480" y="70" width="164" height="430" rx="14"/>
+  <text class="h" x="1494" y="94">REVIEWER</text>
+  <rect class="box key" x="1494" y="108" width="136" height="104" rx="8"/>
+  <text class="t" x="1506" y="128">Chat answer</text><text class="s" x="1506" y="146">value range</text><text class="s" x="1506" y="162">adjusted comps</text><text class="s" x="1506" y="178">every fact cited</text><text class="s" x="1506" y="194">confidence shown</text>
+  <path class="ln" d="M1562 212 V224" marker-end="url(#a-ink)"/>
+  <rect class="gate" x="1494" y="226" width="136" height="104" rx="8"/>
+  <text class="gt" x="1506" y="248">G3 · DECISION</text><text class="s" x="1506" y="266">human signs off</text><text class="s" x="1506" y="282">system advises,</text><text class="s" x="1506" y="298">never commits</text><text class="s" x="1506" y="314">money</text>
+  <rect class="loopbox" x="1494" y="344" width="136" height="86" rx="8"/>
+  <text class="t" x="1506" y="364" style="font-size:13px">“This is wrong”</text><text class="s" x="1506" y="382">on any fact,</text><text class="s" x="1506" y="398">comp or value</text>
+  <path class="ln-loop" d="M1562 430 V574" marker-end="url(#a-loop)"/>
+
+  <!-- Feedback lane boxes -->
+  <rect class="note" x="276" y="576" width="340" height="118" rx="8"/>
+  <text class="t" x="290" y="598">Feedback trains models</text>
+  <text class="s" x="290" y="618">comp accept / reject → comp ranker</text>
+  <text class="s" x="290" y="636">adjustment notes → local LINEAR_REG</text>
+  <text class="s" x="290" y="654">value overrides → evaluation only</text>
+  <text class="s" x="290" y="672">closed sales remain the label</text>
+
+  <rect class="loopbox" x="640" y="576" width="272" height="118" rx="8"/>
+  <text class="t" x="654" y="598">Approved correction</text>
+  <text class="s" x="654" y="618">updates the golden record</text>
+  <text class="s" x="654" y="636">re-values subject + its comps</text>
+  <text class="s" x="654" y="654">joins the gold eval set</text>
+  <text class="s" x="654" y="672">drives extractor fixes</text>
+
+  <rect class="loopbox" x="956" y="576" width="234" height="118" rx="8"/>
+  <text class="t" x="970" y="598">Review queue</text>
+  <text class="s" x="970" y="618">steward, adjudication or</text>
+  <text class="s" x="970" y="636">appraiser by error type</text>
+  <text class="s" x="970" y="654">2nd approver if value moves</text>
+  <text class="s" x="970" y="672">+ weekly random sample</text>
+
+  <rect class="loopbox" x="1230" y="576" width="184" height="118" rx="8"/>
+  <text class="t" x="1244" y="598">Pub/Sub → API</text>
+  <text class="s" x="1244" y="618">Cloud Run endpoint</text>
+  <text class="s" x="1244" y="636">appends, never</text>
+  <text class="s" x="1244" y="654">overwrites</text>
+
+  <rect class="loopbox" x="1444" y="576" width="190" height="118" rx="8"/>
+  <text class="t" x="1458" y="598">Flag captured</text>
+  <text class="s" x="1458" y="618">field + correct value</text>
+  <text class="s" x="1458" y="636">reason + evidence</text>
+  <text class="s" x="1458" y="654">who flagged, role</text>
+
+  <path class="ln-loop" d="M1444 635 H1416" marker-end="url(#a-loop)"/>
+  <path class="ln-loop" d="M1230 635 H1192" marker-end="url(#a-loop)"/>
+  <path class="ln-loop" d="M956 635 H914" marker-end="url(#a-loop)"/>
+  <path class="ln-loop" d="M700 576 V502" marker-end="url(#a-loop)"/>
+  <text class="tiny-loop" x="708" y="552">append</text>
+
+  <!-- G1 held records -> review queue -->
+  <path class="halo" d="M544 440 V520 H1073 V572"/>
+  <path class="ln-loop dash" d="M544 440 V520 H1073 V572" marker-end="url(#a-loop)"/>
+  <text class="tiny-loop" x="716" y="512">held records → review queue</text>
+
+  <!-- Row 3 -->
+  <rect class="note" x="16" y="740" width="560" height="108" rx="8"/>
+  <text class="t" x="30" y="762">Retraining cadence</text>
+  <text class="s" x="30" y="782">continuous: approved fix → re-score affected properties</text>
+  <text class="s" x="30" y="800">weekly: comp ranker, adjustments · monthly: market index</text>
+  <text class="s" x="30" y="818">monthly to quarterly: AVM, promoted only if it beats the</text>
+  <text class="s" x="30" y="836">champion on post-cutoff sales, gold set and fairness checks</text>
+
+  <rect class="gate" x="600" y="740" width="590" height="108" rx="8"/>
+  <text class="gt" x="614" y="762">CIRCUIT BREAKER · SCHEDULED ML.EVALUATE</text>
+  <text class="s" x="614" y="782">frozen pre-listing estimates vs. closed sales, by market</text>
+  <text class="s" x="614" y="800">plus unanchored sales the model never influenced</text>
+  <text class="s" x="614" y="818">drift past threshold → Cloud Monitoring alert</text>
+  <text class="s" x="614" y="836">→ tighten G2 in that market + trigger early retrain</text>
+
+  <path class="halo-band" d="M1190 790 H1212 V402 H1244"/>
+  <path class="ln-gate" d="M1190 790 H1212 V402 H1244" marker-end="url(#a-gate)"/>
+
+  <rect class="note" x="1230" y="740" width="414" height="108" rx="8"/>
+  <text class="t" x="1244" y="762">Phase 2 · consumer scale</text>
+  <text class="s" x="1244" y="782">push curated facts + embeddings to</text>
+  <text class="s" x="1244" y="800">AlloyDB or Vertex AI Vector Search</text>
+  <text class="s" x="1244" y="818">for millisecond answers at marketplace scale</text>
+
+  <!-- Governance -->
+  <rect class="gov" x="16" y="868" width="1628" height="52" rx="8"/>
+  <text x="32" y="899"><tspan class="tb">Governance on every layer:</tspan><tspan class="ts" dx="10">Dataplex lineage + data quality  ·  IAM  ·  VPC Service Controls  ·  CMEK  ·  Sensitive Data Protection for PII in leases and disclosures  ·  Cloud Audit Logs  ·  Looker KPI dashboard</tspan></text>
+</svg>
+    </div>
+    <figcaption>Top row is the request path, left to right. The rose band underneath is the correction loop, which writes back into BigQuery. The amber circuit breaker watches realized sales and tightens the valuation gate when a market turns.</figcaption>
+  </figure>
+
+  <section class="talk">
+    <h2>How to walk it in the room</h2>
+    <ol>
+      <li><b>Land.</b> Siloed documents land in Cloud Storage and show up in BigQuery as object tables.</li>
+      <li><b>Parse and clean.</b> Document AI handles structure; Gemini takes the scans, checkboxes and tables that span pages. Dataform resolves every document to one property and maps legacy fields to the UAD 3.6 schema.</li>
+      <li><b>G1, data gate.</b> Low-confidence or conflicting facts are held for review instead of entering the golden record.</li>
+      <li><b>Model.</b> BigQuery holds the cited facts, embeddings and sales. BQML builds the market index, the comp ranker, the adjustment grid and the AVM, with <code>ML.EXPLAIN_PREDICT</code> on every value.</li>
+      <li><b>G2, valuation gate.</b> The agent gathers evidence with tools and does the math deterministically. It returns a range, or routes to an appraiser when the evidence is thin.</li>
+      <li><b>G3, decision gate.</b> A human signs off on anything that moves money.</li>
+      <li><b>Close the loop.</b> Every “this is wrong” goes through review with a second approver, updates the record, re-values affected properties and feeds the next training cycle. The circuit breaker checks the models against real sales.</li>
+    </ol>
+  </section>
+</div>

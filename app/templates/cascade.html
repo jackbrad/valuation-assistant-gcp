@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio ripple effect (What changed) — Appraisal AI{% endblock %}
+
+{% block content %}
+<!-- SCREEN HERO HEADER -->
+<div class="hero">
+  <h1 class="display">Portfolio Ripple Effect (What Changed)</h1>
+  <p class="body-lg">When you fix a mistake on one home, every neighboring home that used it as a recent sale comparison automatically updates its value. This prevents hidden portfolio errors.</p>
+</div>
+
+<!-- CONCEPT & PIPELINE VISUALIZER CARD -->
+<div class="cl-card">
+  <div class="cl-card-head">
+    <div>
+      <div class="cl-card-eyebrow">Dependency graph propagation</div>
+      <h2 class="cl-card-title">How the ripple effect works (in 3 steps)</h2>
+    </div>
+    <span class="cl-badge cl-badge-brand">
+      <span class="cl-icon">hub</span>
+      <span>Automated revaluation</span>
+    </span>
+  </div>
+
+  <p class="body" style="margin:0;color:var(--ink-muted);line-height:22px;">
+    In real estate, homes aren't valued in isolation. When 14 Larkspur's square footage was wrong, its prior sale price was calculated as an inflated $443 per square foot. <b>Every neighbor that used 14 Larkspur as a comparable sale inherited this error.</b> The system automatically traces these dependencies and re-scores affected homes in real time.
+  </p>
+
+  <!-- CASCADE PIPELINE VISUALIZER -->
+  <div class="cascade-pipeline">
+    <div class="pipeline-step">
+      <span class="step-bubble">1</span>
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--ink);">Home data fixed</div>
+        <div class="caption" style="color:var(--ink-muted);">14 Larkspur GLA: 1,240 &rarr; 2,080 SF</div>
+      </div>
+    </div>
+    <span class="cl-icon pipeline-arrow">arrow_forward</span>
+    <div class="pipeline-step step-comp">
+      <span class="step-bubble">2</span>
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--ink);">Past sale recalculated</div>
+        <div class="caption" style="color:var(--ink-muted);">Prior sale price per SF recalibrated</div>
+      </div>
+    </div>
+    <span class="cl-icon pipeline-arrow">arrow_forward</span>
+    <div class="pipeline-step step-downstream">
+      <span class="step-bubble">3</span>
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--ink);">Neighbor revalued</div>
+        <div class="caption" style="color:var(--ink-muted);">18 Larkspur Ln revalued (-$23,500 / -4.6%)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CASCADE RUNS -->
+{% for run in cascade_runs %}
+<div class="cl-card">
+  <div class="cl-card-head">
+    <div style="display:flex;align-items:center;gap:var(--space-2);">
+      <span class="cl-badge cl-badge-brand code">Event #{{ run.correction_id }}</span>
+      <h3 class="cl-card-title" style="font-size:17px;">Automated portfolio cascade triggered</h3>
+    </div>
+    <div class="code caption" style="color:var(--ink-muted);">
+      Committed: {{ run.timestamp }}
+    </div>
+  </div>
+
+  <div class="cl-table-wrap">
+    <table class="cl-table">
+      <thead>
+        <tr>
+          <th>Property address</th>
+          <th>Graph role</th>
+          <th>Previous range</th>
+          <th>Updated range</th>
+          <th class="cl-num">Updated point</th>
+          <th>Price delta</th>
+          <th>Cascade driver / Lineage explanation</th>
+          <th style="text-align:right;min-width:110px;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for aff in run.affected %}
+        <tr>
+          <td>
+            <div style="font-weight:600;">{{ aff.address }}</div>
+            <div class="code" style="font-size:12px;color:var(--ink-muted);">{{ aff.property_id }}</div>
+          </td>
+          <td>
+            {% if aff.role == 'Subject' %}
+              <span class="cl-badge cl-badge-brand">
+                <span class="cl-icon">home</span>
+                <span>Subject property</span>
+              </span>
+            {% else %}
+              <span class="cl-badge cl-badge-warning">
+                <span class="cl-icon">link</span>
+                <span>Dependent comp</span>
+              </span>
+            {% endif %}
+          </td>
+          <td><span class="code" style="color:var(--ink-muted);font-size:13px;">{{ aff.old_value_range }}</span></td>
+          <td><span class="code" style="color:var(--ink);font-weight:700;font-size:13px;">{{ aff.new_value_range }}</span></td>
+          <td class="cl-num"><span class="code" style="font-weight:700;font-size:15px;">${{ "{:,.0f}".format(aff.point_new) }}</span></td>
+          <td>
+            {% if aff.role == 'Subject' %}
+              <span class="cl-badge cl-badge-success code" style="font-weight:600;">+27.9%</span>
+            {% else %}
+              <span class="cl-badge cl-badge-warning code" style="font-weight:600;">-$23,500 (-4.6%)</span>
+            {% endif %}
+          </td>
+          <td style="font-size:13px;max-width:320px;color:var(--ink-muted);">
+            {{ aff.reason }}
+          </td>
+          <td style="text-align:right;white-space:nowrap;">
+            <a href="/ask?q={{ aff.address|urlencode }}&user={{ user }}" class="cl-btn cl-btn-secondary cl-btn-sm">
+              <span class="cl-icon">search</span>
+              <span>Inspect</span>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="cl-card" style="text-align:center;padding:var(--space-7) var(--space-5);align-items:center;">
+  <span class="cl-icon" style="font-size:40px;color:var(--ink-muted);margin-bottom:var(--space-2);">account_tree</span>
+  <h3 class="title">No ripple events recorded yet</h3>
+  <p class="body" style="max-width:540px;margin:var(--space-2) auto var(--space-4);color:var(--ink-muted);line-height:22px;">
+    To demonstrate an automatic portfolio ripple live during your presentation, submit and approve a square footage correction for <b>14 Larkspur Lane</b>. The system will detect downstream comp dependencies and re-score neighboring <b>18 Larkspur Lane</b> automatically.
+  </p>
+  <a href="/ask?q=14+Larkspur+Ln&user={{ user }}" class="cl-btn cl-btn-primary">
+    <span class="cl-icon">search</span>
+    <span>Start demo: Go to 14 Larkspur Ln</span>
+  </a>
+</div>
+{% endfor %}
+{% endblock %}

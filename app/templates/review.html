@@ -1,0 +1,148 @@
+{% extends "shell.html" %}
+{% block title %}Review queue · Valuation assistant{% endblock %}
+
+{% block actions %}
+      <label class="acting-as">
+        <span class="label">Acting as</span>
+        <select class="cl-input select" onchange="location.href='/review?user=' + this.value">
+          {% for uid, u in users.items() %}
+          <option value="{{ uid }}" {% if uid == user %}selected{% endif %}>{{ u.name }} · {{ u.role }}</option>
+          {% endfor %}
+        </select>
+      </label>
+{% endblock %}
+
+{% block content %}
+<main class="page">
+  <div class="page-head">
+    <h1 class="display">Review queue</h1>
+    <p class="body-lg">A change to a fact that moves a value needs evidence and two independent approvers. The person who flagged it, and anyone with a stake in the loan, can't approve it.</p>
+  </div>
+
+  {% set open_items = queue | selectattr("status", "equalto", "pending") | list %}
+  {% set done_items = queue | rejectattr("status", "equalto", "pending") | list %}
+
+  {% if current_user.has_stake %}
+  <div class="cl-banner cl-banner-warning">
+    <span class="cl-icon">block</span>
+    <div class="cl-banner-body">
+      <div class="cl-banner-title">{{ current_user.name }} is the loan officer on 14 Larkspur Ln</div>
+      <div class="cl-banner-text">Loan officers are paid when loans close, so they can't approve changes that move a property's value.</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="queue">
+    <h2 class="headline">Waiting for review <span class="muted">({{ open_items | length }})</span></h2>
+    {% for item in open_items %}
+    {% set label = field_label(item.field_name) %}
+    <article class="cl-card review-item">
+      <div class="review-top">
+        <div>
+          <div class="cl-card-eyebrow">{{ item.item_id }} · {{ label }}</div>
+          <h3 class="cl-card-title"><a href="/?q={{ ('What is ' ~ item.property_address ~ ' worth?') | urlencode }}">{{ item.property_address }}</a></h3>
+          <div class="caption muted">Flagged by {{ person(item.flagger_id) }} · {{ item.created_at }}</div>
+        </div>
+        <span class="cl-badge cl-badge-warning"><span class="cl-icon">pending</span><span>{{ item.approvals | length }} of {{ 2 if item.requires_two_approvals else 1 }} approvals</span></span>
+      </div>
+
+      <div class="change">
+        <div class="change-side">
+          <div class="label muted">Current</div>
+          <div class="change-value old">{{ fmt(item.current_value) }}</div>
+        </div>
+        <span class="cl-icon change-arrow">arrow_forward</span>
+        <div class="change-side">
+          <div class="label muted">Proposed</div>
+          <div class="change-value">{{ fmt(item.proposed_value) }}</div>
+        </div>
+      </div>
+
+      <div class="review-grid">
+        <div>
+          <div class="label muted">Reason</div>
+          <p class="body">{{ item.reason }}</p>
+        </div>
+        <div>
+          <div class="label muted">Evidence</div>
+          <div class="doc-pages">
+            {% for c in cites(item.evidence_desc) %}
+            <button type="button" class="cite" data-doc="{{ c.doc_id }}" data-page="{{ c.page }}"><span class="cl-icon">description</span>{{ c.doc_id }} p.{{ c.page }}</button>
+            {% else %}<span class="muted">{{ item.evidence_desc }}</span>{% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <ol class="approvals">
+        {% for n in range(2 if item.requires_two_approvals else 1) %}
+        <li class="{% if item.approvals | length > n %}done{% endif %}">
+          <span class="cl-icon">{% if item.approvals | length > n %}check_circle{% else %}radio_button_unchecked{% endif %}</span>
+          <span>Approver {{ n + 1 }}: {% if item.approvals | length > n %}{{ person(item.approvals[n]) }}{% else %}waiting{% endif %}</span>
+        </li>
+        {% endfor %}
+      </ol>
+
+      <div class="review-action">
+        {% if current_user.has_stake %}
+          <button type="button" class="cl-btn cl-btn-secondary" disabled><span class="cl-icon">block</span><span>Approve</span></button>
+          <span class="blocked"><span class="cl-icon">block</span>{{ current_user.name }} has a stake in this loan, so can't approve.</span>
+        {% elif user == item.flagger_id %}
+          <button type="button" class="cl-btn cl-btn-secondary" disabled><span class="cl-icon">block</span><span>Approve</span></button>
+          <span class="blocked"><span class="cl-icon">person_off</span>You flagged this, so someone else has to approve it.</span>
+        {% elif user in item.approvals %}
+          <button type="button" class="cl-btn cl-btn-secondary" disabled><span class="cl-icon">check</span><span>Approved</span></button>
+          <span class="muted">You've approved. Waiting for a second reviewer.</span>
+        {% else %}
+          <form method="post" action="/api/review/{{ item.item_id }}/approve">
+            <input type="hidden" name="user_id" value="{{ user }}">
+            <button type="submit" class="cl-btn cl-btn-primary"><span class="cl-icon">check</span><span>Approve as {{ current_user.name }}</span></button>
+          </form>
+        {% endif %}
+      </div>
+    </article>
+    {% else %}
+    <div class="cl-card empty"><span class="cl-icon">task_alt</span><span>Nothing waiting for review.</span></div>
+    {% endfor %}
+  </section>
+
+  {% if done_items %}
+  <section class="queue">
+    <h2 class="headline">Approved and applied</h2>
+    {% for item in done_items %}
+    <article class="cl-card review-item done-item">
+      <div class="review-top">
+        <div>
+          <div class="cl-card-eyebrow">{{ item.item_id }} · {{ field_label(item.field_name) }}</div>
+          <h3 class="cl-card-title">{{ item.property_address }}: {{ fmt(item.current_value) }} → {{ fmt(item.proposed_value) }}</h3>
+          <div class="caption muted">Approved by {{ people(item.approvals) }}</div>
+        </div>
+        <span class="cl-badge cl-badge-success"><span class="cl-icon">check_circle</span><span>Applied</span></span>
+      </div>
+      <p class="body">The record is updated and the engine re-ran. Ask again to see the new value.</p>
+      <div><a class="cl-btn cl-btn-primary" href="/?q={{ ('What is ' ~ item.property_address ~ ' worth now?') | urlencode }}"><span class="cl-icon">forum</span><span>Ask about {{ item.property_address }} again</span></a></div>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if corrections %}
+  <section class="cl-card">
+    <div><div class="cl-card-eyebrow">Append-only, never edited</div><h2 class="cl-card-title">Corrections log</h2></div>
+    <table class="mini">
+      <thead><tr><th>ID</th><th>Property</th><th>Field</th><th class="num">Before</th><th class="num">After</th><th>Approved by</th><th>Applied</th></tr></thead>
+      <tbody>
+        {% for c in corrections %}
+        <tr><td class="code">{{ c.correction_id }}</td><td>{{ c.property_id }}</td><td>{{ field_label(c.field) }}</td>
+          <td class="num">{{ fmt(c.old_value) }}</td><td class="num">{{ fmt(c.new_value) }}</td>
+          <td>{{ people(c.approvers) }}</td><td>{{ c.applied_at }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <form class="reset" method="post" action="/api/demo/reset" onsubmit="return confirm('Reset all flags and corrections to the starting state?')">
+    <button type="submit" class="cl-btn cl-btn-ghost cl-btn-sm"><span class="cl-icon">restart_alt</span><span>Reset demo data</span></button>
+  </form>
+</main>
+{% endblock %}
